@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, CalendarCheck, User, Wallet } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, CalendarCheck, User, Wallet, Award } from 'lucide-react';
 
 const TeacherLayout = () => {
   const navigate = useNavigate();
@@ -9,6 +9,7 @@ const TeacherLayout = () => {
   const menuItems = [
     { path: '/guru/dashboard', icon: LayoutDashboard, label: 'Beranda' },
     { path: '/guru/kelas', icon: Users, label: 'Kelas' },
+    { path: '/guru/prestasi', icon: Award, label: 'Prestasi' },
     { path: '/guru/absen', icon: CalendarCheck, label: 'Absen' },
     { path: '/guru/tabungan', icon: Wallet, label: 'Tabungan' },
     { path: '/guru/ujian', icon: BookOpen, label: 'Tes' },

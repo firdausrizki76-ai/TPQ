@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { User, Lock, ArrowRight, Loader2, AlertCircle, Sparkles, UserPlus } from 'lucide-react';
 import { authAPI } from '../../services/api';
 import './Login.css';
 
@@ -43,6 +43,41 @@ const Login = () => {
   return (
     <div className="login-container flex items-center justify-center min-h-screen p-4">
       <div className="login-wrapper w-full flex flex-col items-center">
+        {/* BANNER GEDE PENDAFTARAN SANTRI BARU */}
+        <div 
+          onClick={() => navigate('/daftar')}
+          role="button"
+          tabIndex={0}
+          className="w-full max-w-[420px] mb-2 cursor-pointer transform hover:-translate-y-1 transition-all duration-300 shadow-xl rounded-2xl overflow-hidden border-2 border-amber-300 bg-gradient-to-r from-emerald-800 via-emerald-700 to-teal-800 text-white p-3.5 relative z-30"
+          style={{ animation: 'pulse 3s infinite' }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-bold shadow-md shrink-0">
+              <UserPlus size={22} className="text-emerald-950" />
+            </div>
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <span className="inline-block bg-amber-400/20 text-amber-300 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded-full uppercase">
+                  Penerimaan Santri Baru
+                </span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400"></span>
+                </span>
+              </div>
+              <h3 className="font-extrabold text-[15px] leading-tight text-white">
+                Pendaftaran Santri Baru <span className="text-amber-300 underline underline-offset-2">Klik Disini</span>
+              </h3>
+              <p className="text-[11px] text-emerald-100">
+                Buka formulir pendaftaran santri baru online
+              </p>
+            </div>
+            <div className="bg-white/10 p-2 rounded-xl text-amber-300 shrink-0">
+              <ArrowRight size={18} />
+            </div>
+          </div>
+        </div>
+
         {/* Logo moved to center */}
         <div className="login-logo-center">
           <img src="/assets/logoapp.png" alt="Logo TPQ Anfak Al Azizah" className="logo" />

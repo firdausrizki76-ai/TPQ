@@ -1359,4 +1359,315 @@ app.delete('/api/users/:id', async (req, res) => {
   } catch (e) { fail(res, e.message, 500); }
 });
 
+// ==================== PENDAFTARAN SANTRI BARU ====================
+// Public submission
+app.post('/api/pendaftaran', async (req, res) => {
+  try {
+    const payload = { ...req.body };
+    if (!payload.nama_lengkap) return fail(res, 'Nama lengkap wajib diisi');
+    if (!payload.no_hp) return fail(res, 'Nomor HP/WhatsApp wajib diisi');
+
+    // Auto-generate nomor_pendaftaran if not provided
+    if (!payload.nomor_pendaftaran) {
+      const year = new Date().getFullYear();
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      payload.nomor_pendaftaran = `REG-${year}-${rand}`;
+    }
+    payload.status = 'menunggu';
+
+    const { data, error } = await supabase.from('pendaftaran_santri').insert(payload).select('*, kelas:kelas_id(nama_kelas)').single();
+    if (error) throw error;
+    ok(res, data, 'Pendaftaran berhasil dikirim. Kami akan segera menghubungi Anda.');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// Admin list pendaftaran
+app.get('/api/pendaftaran', async (req, res) => {
+  try {
+    const { status, search } = req.query;
+    let q = supabase.from('pendaftaran_santri')
+      .select('*, kelas:kelas_id(nama_kelas, kode_kelas), santri:santri_id(nama_lengkap, nomor_induk)')
+      .order('created_at', { ascending: false });
+
+    if (status && status !== 'semua') {
+      q = q.eq('status', status);
+    }
+    if (search) {
+      q = q.or(`nama_lengkap.ilike.%${search}%,nomor_pendaftaran.ilike.%${search}%,no_hp.ilike.%${search}%`);
+    }
+
+    const { data, error } = await q;
+    if (error) throw error;
+    ok(res, data || []);
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// Admin update pendaftaran
+app.put('/api/pendaftaran/:id', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('pendaftaran_santri').update(req.body).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    ok(res, data, 'Data pendaftaran berhasil diperbarui');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// Admin Approve: Convert pendaftaran to active santri
+app.post('/api/pendaftaran/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nomor_induk, kelas_id } = req.body;
+
+    // 1. Get pendaftaran data
+    const { data: reg, error: regErr } = await supabase.from('pendaftaran_santri').select('*').eq('id', id).single();
+    if (regErr || !reg) throw new Error('Data pendaftaran tidak ditemukan');
+
+    // 2. Determine nomor_induk if not specified
+    let finalNis = nomor_induk;
+    if (!finalNis) {
+      // Find highest existing nomor_induk
+      const { data: lastSantri } = await supabase.from('santri').select('nomor_induk').order('created_at', { ascending: false }).limit(1);
+      const yearPrefix = String(new Date().getFullYear()).slice(-2);
+      if (lastSantri && lastSantri.length > 0 && lastSantri[0].nomor_induk) {
+        const num = parseInt(lastSantri[0].nomor_induk, 10);
+        finalNis = !isNaN(num) ? String(num + 1) : `${yearPrefix}0001`;
+      } else {
+        finalNis = `${yearPrefix}0001`;
+      }
+    }
+
+    // 3. Insert into santri table
+    const targetKelasId = kelas_id || reg.kelas_id || null;
+    const newSantriData = {
+      nomor_induk: finalNis,
+      nama_lengkap: reg.nama_lengkap,
+      nama_panggilan: reg.nama_panggilan || null,
+      jenis_kelamin: reg.jenis_kelamin || 'L',
+      tempat_lahir: reg.tempat_lahir || null,
+      tanggal_lahir: reg.tanggal_lahir || null,
+      alamat: reg.alamat || null,
+      nama_ayah: reg.nama_ayah || null,
+      nama_ibu: reg.nama_ibu || null,
+      no_hp_wali: reg.no_hp || null,
+      status: 'aktif',
+      kelas_id: targetKelasId,
+      tanggal_daftar: new Date().toISOString().split('T')[0],
+      password: 'siswa' + finalNis.slice(-4),
+    };
+
+    const { data: createdSantri, error: createErr } = await supabase.from('santri').insert(newSantriData).select().single();
+    if (createErr) throw createErr;
+
+    // 4. Update pendaftaran status
+    await supabase.from('pendaftaran_santri').update({
+      status: 'diterima',
+      santri_id: createdSantri.id,
+      updated_at: new Date()
+    }).eq('id', id);
+
+    ok(res, { santri: createdSantri }, 'Santri baru berhasil diterima dan dimasukkan ke data santri aktif');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// Admin delete pendaftaran
+app.delete('/api/pendaftaran/:id', async (req, res) => {
+  try {
+    const { error } = await supabase.from('pendaftaran_santri').delete().eq('id', req.params.id);
+    if (error) throw error;
+    ok(res, null, 'Pendaftaran berhasil dihapus');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// ==================== PRESTASI SANTRI ====================
+app.get('/api/prestasi', async (req, res) => {
+  try {
+    const { santri_id, guru_id, kelas_id, tanggal, dari, sampai, kategori } = req.query;
+    let q = supabase.from('prestasi_santri')
+      .select('*, santri:santri_id(id, nama_lengkap, nomor_induk, kelas_id, kelas:kelas_id(id, nama_kelas, kode_kelas)), guru:guru_id(id, nama_lengkap)')
+      .order('tanggal', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (santri_id) q = q.eq('santri_id', santri_id);
+    if (guru_id) q = q.eq('guru_id', guru_id);
+    if (tanggal) q = q.eq('tanggal', tanggal);
+    if (dari) q = q.gte('tanggal', dari);
+    if (sampai) q = q.lte('tanggal', sampai);
+    if (kategori && kategori !== 'semua') q = q.eq('kategori', kategori);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    let result = data || [];
+    if (kelas_id) {
+      result = result.filter(item => item.santri?.kelas_id === kelas_id || item.santri?.kelas?.id === kelas_id);
+    }
+
+    ok(res, result);
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.post('/api/prestasi', async (req, res) => {
+  try {
+    const payload = req.body;
+    let dataResult;
+    if (Array.isArray(payload)) {
+      const { data, error } = await supabase.from('prestasi_santri').insert(payload).select();
+      if (error) throw error;
+      dataResult = data;
+    } else {
+      const { data, error } = await supabase.from('prestasi_santri').insert(payload).select('*, santri:santri_id(nama_lengkap, nomor_induk)').single();
+      if (error) throw error;
+      dataResult = data;
+    }
+    ok(res, dataResult, 'Prestasi santri berhasil dicatat');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.put('/api/prestasi/:id', async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('prestasi_santri').update(req.body).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    ok(res, data, 'Prestasi santri berhasil diperbarui');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.delete('/api/prestasi/:id', async (req, res) => {
+  try {
+    const { error } = await supabase.from('prestasi_santri').delete().eq('id', req.params.id);
+    if (error) throw error;
+    ok(res, null, 'Prestasi santri berhasil dihapus');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// Rapot Prestasi Santri (Rekap per santri)
+app.get('/api/prestasi/rapot/:santri_id', async (req, res) => {
+  try {
+    const { santri_id } = req.params;
+    const { dari, sampai } = req.query;
+
+    const { data: santri, error: sErr } = await supabase.from('santri')
+      .select('*, kelas:kelas_id(id, nama_kelas, wali_kelas_id), wali:wali_kelas_id(id, nama_lengkap)')
+      .eq('id', santri_id)
+      .single();
+    if (sErr || !santri) throw new Error('Data santri tidak ditemukan');
+
+    let q = supabase.from('prestasi_santri')
+      .select('*, guru:guru_id(nama_lengkap)')
+      .eq('santri_id', santri_id)
+      .order('tanggal', { ascending: true });
+
+    if (dari) q = q.gte('tanggal', dari);
+    if (sampai) q = q.lte('tanggal', sampai);
+
+    const { data: records, error: rErr } = await q;
+    if (rErr) throw rErr;
+
+    const list = records || [];
+    const qiraatiList = list.filter(r => r.kategori === 'Qiraati' || !r.kategori);
+    const tahfidzList = list.filter(r => r.kategori === 'Tahfidz');
+    const doaList = list.filter(r => r.kategori === 'Doa Harian' || r.kategori === 'Hadits');
+    const akhlakList = list.filter(r => r.kategori === 'Adab & Akhlak' || r.kategori === 'Praktik Ibadah');
+
+    const lastQiraati = qiraatiList.length > 0 ? qiraatiList[qiraatiList.length - 1] : null;
+    const lastTahfidz = tahfidzList.length > 0 ? tahfidzList[tahfidzList.length - 1] : null;
+
+    ok(res, {
+      santri,
+      periode: { dari: dari || null, sampai: sampai || null },
+      totalPrestasi: list.length,
+      lastQiraati,
+      lastTahfidz,
+      qiraatiList,
+      tahfidzList,
+      doaList,
+      akhlakList,
+      allRecords: list
+    });
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// ==================== TRANSAKSI KEUANGAN (KAS MASUK & KELUAR) ====================
+app.get('/api/transaksi-keuangan', async (req, res) => {
+  try {
+    const { tipe, kategori, dari, sampai, bulan, tahun, search } = req.query;
+    let q = supabase.from('transaksi_keuangan').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
+
+    if (tipe && tipe !== 'semua') q = q.eq('tipe', tipe);
+    if (kategori && kategori !== 'semua') q = q.eq('kategori', kategori);
+    if (dari) q = q.gte('tanggal', dari);
+    if (sampai) q = q.lte('tanggal', sampai);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    let items = data || [];
+
+    // Filter by month/year if no specific date range is set
+    if (!dari && !sampai && (bulan || tahun)) {
+      items = items.filter(item => {
+        const d = new Date(item.tanggal);
+        const matchYear = tahun ? d.getFullYear() === parseInt(tahun, 10) : true;
+        const matchMonth = bulan ? (d.getMonth() + 1) === parseInt(bulan, 10) : true;
+        return matchYear && matchMonth;
+      });
+    }
+
+    if (search) {
+      const s = search.toLowerCase();
+      items = items.filter(item => 
+        (item.keterangan && item.keterangan.toLowerCase().includes(s)) ||
+        (item.kategori && item.kategori.toLowerCase().includes(s)) ||
+        (item.penanggung_jawab && item.penanggung_jawab.toLowerCase().includes(s))
+      );
+    }
+
+    const totalPemasukan = items.filter(i => i.tipe === 'pemasukan').reduce((sum, i) => sum + Number(i.nominal), 0);
+    const totalPengeluaran = items.filter(i => i.tipe === 'pengeluaran').reduce((sum, i) => sum + Number(i.nominal), 0);
+    const saldoKas = totalPemasukan - totalPengeluaran;
+
+    ok(res, {
+      items,
+      totalPemasukan,
+      totalPengeluaran,
+      saldoKas,
+      totalTransaksi: items.length
+    });
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.post('/api/transaksi-keuangan', async (req, res) => {
+  try {
+    const payload = req.body;
+    if (!payload.tipe || !payload.kategori || !payload.nominal) {
+      return fail(res, 'Tipe, kategori, dan nominal transaksi wajib diisi');
+    }
+    payload.nominal = Number(payload.nominal);
+    if (isNaN(payload.nominal) || payload.nominal <= 0) {
+      return fail(res, 'Nominal transaksi harus berupa angka positif');
+    }
+    if (!payload.tanggal) payload.tanggal = new Date().toISOString().split('T')[0];
+
+    const { data, error } = await supabase.from('transaksi_keuangan').insert(payload).select().single();
+    if (error) throw error;
+    ok(res, data, 'Transaksi keuangan berhasil disimpan');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.put('/api/transaksi-keuangan/:id', async (req, res) => {
+  try {
+    const payload = { ...req.body, updated_at: new Date() };
+    if (payload.nominal) payload.nominal = Number(payload.nominal);
+    const { data, error } = await supabase.from('transaksi_keuangan').update(payload).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    ok(res, data, 'Transaksi keuangan berhasil diperbarui');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.delete('/api/transaksi-keuangan/:id', async (req, res) => {
+  try {
+    const { error } = await supabase.from('transaksi_keuangan').delete().eq('id', req.params.id);
+    if (error) throw error;
+    ok(res, null, 'Transaksi keuangan berhasil dihapus');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
 export default app;

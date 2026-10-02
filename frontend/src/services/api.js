@@ -192,3 +192,42 @@ export const userAPI = {
   update: (id, body) => request(`/users/${id}`, { method: 'PUT', body }),
   delete: (id) => request(`/users/${id}`, { method: 'DELETE' }),
 };
+
+// Pendaftaran Santri Baru
+export const pendaftaranAPI = {
+  submitPublic: (body) => request('/pendaftaran', { method: 'POST', body }),
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/pendaftaran${qs ? `?${qs}` : ''}`);
+  },
+  update: (id, body) => request(`/pendaftaran/${id}`, { method: 'PUT', body }),
+  approve: (id, body = {}) => request(`/pendaftaran/${id}/approve`, { method: 'POST', body }),
+  delete: (id) => request(`/pendaftaran/${id}`, { method: 'DELETE' }),
+};
+
+// Prestasi Santri (Harian / Mutaba'ah)
+export const prestasiAPI = {
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/prestasi${qs ? `?${qs}` : ''}`);
+  },
+  create: (body) => request('/prestasi', { method: 'POST', body }),
+  update: (id, body) => request(`/prestasi/${id}`, { method: 'PUT', body }),
+  delete: (id) => request(`/prestasi/${id}`, { method: 'DELETE' }),
+  getRapot: (santriId, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/prestasi/rapot/${santriId}${qs ? `?${qs}` : ''}`);
+  },
+};
+
+// Transaksi Keuangan (Kas Masuk & Keluar)
+export const transaksiKeuanganAPI = {
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/transaksi-keuangan${qs ? `?${qs}` : ''}`);
+  },
+  create: (body) => request('/transaksi-keuangan', { method: 'POST', body }),
+  update: (id, body) => request(`/transaksi-keuangan/${id}`, { method: 'PUT', body }),
+  delete: (id) => request(`/transaksi-keuangan/${id}`, { method: 'DELETE' }),
+};
+

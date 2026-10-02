@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, BookOpen, GraduationCap, 
   CalendarCheck, CreditCard, Wallet, FileBarChart, Settings, LogOut, Menu, X,
-  Award
+  Award, UserPlus, Medal, DollarSign
 } from 'lucide-react';
 import './AppLayout.css';
 
@@ -25,18 +25,21 @@ const AppLayout = () => {
 
   const menuItems = [
     { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
+    { path: '/pendaftaran', icon: <UserPlus size={20} />, label: 'Pendaftaran' },
     { path: '/santri', icon: <Users size={20} />, label: 'Santri' },
     { path: '/guru', icon: <GraduationCap size={20} />, label: 'Guru' },
     { path: '/kelas', icon: <BookOpen size={20} />, label: 'Kelas' },
     { path: '/absensi', icon: <CalendarCheck size={20} />, label: 'Absensi' },
+    { path: '/prestasi', icon: <Medal size={20} />, label: 'Prestasi' },
     { path: '/ujian', icon: <Award size={20} />, label: 'Ujian & Kenaikan' },
     { path: '/pembayaran', icon: <CreditCard size={20} />, label: 'Pembayaran' },
     { path: '/tabungan', icon: <Wallet size={20} />, label: 'Tabungan' },
+    { path: '/laporan-keuangan', icon: <DollarSign size={20} />, label: 'Laporan Kas' },
     { path: '/laporan', icon: <FileBarChart size={20} />, label: 'Laporan' },
     { path: '/pengaturan', icon: <Settings size={20} />, label: 'Pengaturan' }
   ].filter(item => {
     if (userRole === 'kepala') {
-      return item.path !== '/pembayaran' && item.path !== '/tabungan';
+      return item.path !== '/pembayaran' && item.path !== '/tabungan' && item.path !== '/laporan-keuangan';
     }
     return true;
   });
