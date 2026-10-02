@@ -10,7 +10,6 @@ import './Login.css';
 const PendaftaranPage = () => {
   const navigate = useNavigate();
   const [kelasList, setKelasList] = useState([]);
-  const [loadingKelas, setLoadingKelas] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
@@ -39,8 +38,6 @@ const PendaftaranPage = () => {
       setKelasList(data || []);
     } catch (e) {
       console.error('Gagal memuat kelas:', e);
-    } finally {
-      setLoadingKelas(false);
     }
   };
 
@@ -77,382 +74,363 @@ const PendaftaranPage = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
   return (
-    <div className="login-container min-h-screen p-4 flex flex-col items-center justify-center">
-      <div className="w-full max-w-2xl my-6">
+    <div className="login-container min-h-screen p-4 flex flex-col items-center justify-center" style={{ padding: '30px 16px' }}>
+      <div style={{ width: '100%', maxWidth: '680px', margin: '0 auto', position: 'relative', zIndex: 10 }}>
         
-        {/* Header / Navigasi Balik */}
-        <div className="flex items-center justify-between mb-4">
+        {/* Tombol Kembali */}
+        <div style={{ marginBottom: '16px' }}>
           <button 
             type="button" 
             onClick={() => navigate('/login')}
-            className="flex items-center gap-2 text-white hover:text-emerald-200 transition-colors bg-emerald-900/60 backdrop-blur px-4 py-2 rounded-xl text-sm font-medium border border-emerald-700/50 shadow-sm"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 16px',
+              borderRadius: '20px',
+              backgroundColor: 'rgba(255, 255, 255, 0.15)',
+              border: '1px solid rgba(255, 255, 255, 0.3)',
+              color: '#ffffff',
+              fontSize: '13px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              backdropFilter: 'blur(8px)'
+            }}
           >
             <ArrowLeft size={16} /> Kembali ke Halaman Login
           </button>
         </div>
 
-        {/* Jika Sudah Berhasil Mendaftar */}
+        {/* SUKSES DAFTAR */}
         {successData ? (
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-2xl border-b-4 border-amber-400 text-center animate-fade-in">
-            <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
-              <CheckCircle2 size={46} />
+          <div className="card" style={{ padding: '36px', textAlign: 'center', borderTop: '4px solid var(--color-gold)' }}>
+            <div style={{
+              width: '70px',
+              height: '70px',
+              borderRadius: '50%',
+              backgroundColor: '#dcfce7',
+              color: '#16a34a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 16px auto'
+            }}>
+              <CheckCircle2 size={40} />
             </div>
 
-            <span className="inline-block bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider mb-2">
-              Pendaftaran Diterima
+            <span className="badge badge-success" style={{ marginBottom: '8px' }}>
+              Pendaftaran Berhasil Dikirim
             </span>
 
-            <h2 className="text-2xl sm:text-3xl font-bold text-emerald-950 mb-2">
-              Alhamdulillah! Formulir Berhasil Dikirim
+            <h2 style={{ fontSize: '24px', color: 'var(--color-primary-container)', margin: '8px 0' }}>
+              Alhamdulillah, Data Telah Diterima!
             </h2>
-            <p className="text-slate-600 text-sm max-w-md mx-auto mb-6">
-              Data calon santri telah tersimpan di sistem administrasi TPQ Anfak Al Azizah.
+            <p style={{ fontSize: '13px', color: '#64748b', maxWidth: '480px', margin: '0 auto 24px auto' }}>
+              Formulir pendaftaran santri baru TPQ Anfak Al Azizah telah tersimpan. Pengurus akan segera menghubungi nomor WhatsApp Anda.
             </p>
 
-            {/* Kartu Bukti Pendaftaran */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-6 text-left shadow-sm">
-              <div className="flex justify-between items-start border-b border-slate-200 pb-3 mb-4">
+            {/* Bukti Registrasi Box */}
+            <div style={{
+              backgroundColor: '#f8fafc',
+              border: '1.5px dashed #cbd5e1',
+              borderRadius: '16px',
+              padding: '20px',
+              textAlign: 'left',
+              marginBottom: '24px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '12px', marginBottom: '12px' }}>
                 <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Nomor Registrasi Pendaftaran</div>
-                  <div className="text-2xl font-mono font-bold text-emerald-700">{successData.nomor_pendaftaran}</div>
+                  <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>Nomor Registrasi</span>
+                  <div style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: 'monospace', color: 'var(--color-primary-container)' }}>
+                    {successData.nomor_pendaftaran}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-xs text-slate-500 font-semibold">Tanggal Daftar</div>
-                  <div className="text-sm font-medium text-slate-700">
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', fontWeight: 'bold' }}>Tanggal</span>
+                  <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>
                     {new Date(successData.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
                 <div>
-                  <span className="text-slate-500 block text-xs">Nama Lengkap</span>
-                  <span className="font-semibold text-slate-800">{successData.nama_lengkap}</span>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Nama Santri:</span>
+                  <strong>{successData.nama_lengkap}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-xs">Jenis Kelamin</span>
-                  <span className="font-semibold text-slate-800">{successData.jenis_kelamin === 'L' ? 'Laki-Laki' : 'Perempuan'}</span>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Jenis Kelamin:</span>
+                  <strong>{successData.jenis_kelamin === 'L' ? 'Laki-Laki' : 'Perempuan'}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-xs">Nama Orang Tua (Ayah / Ibu)</span>
-                  <span className="font-semibold text-slate-800">
-                    {successData.nama_ayah || successData.nama_ibu ? `${successData.nama_ayah || '-'} / ${successData.nama_ibu || '-'}` : '-'}
-                  </span>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Orang Tua:</span>
+                  <strong>{successData.nama_ayah || successData.nama_ibu || '-'}</strong>
                 </div>
                 <div>
-                  <span className="text-slate-500 block text-xs">WhatsApp / HP</span>
-                  <span className="font-semibold text-emerald-700">{successData.no_hp}</span>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>WhatsApp:</span>
+                  <strong style={{ color: '#059669' }}>{successData.no_hp}</strong>
                 </div>
-                {successData.kelas?.nama_kelas && (
-                  <div className="sm:col-span-2">
-                    <span className="text-slate-500 block text-xs">Rekomendasi / Pilihan Kelas</span>
-                    <span className="font-semibold text-slate-800">{successData.kelas.nama_kelas}</span>
-                  </div>
-                )}
               </div>
             </div>
 
-            {/* Aksi */}
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-sm transition-all"
+            {/* Aksi Selesai */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button 
+                type="button" 
+                className="btn-primary" 
+                style={{ backgroundColor: '#ffffff', color: '#1e293b', border: '1px solid #cbd5e1' }}
+                onClick={() => window.print()}
               >
-                <Printer size={18} /> Cetak Bukti Pendaftaran
+                <Printer size={16} /> Cetak Bukti Pendaftaran
               </button>
 
-              <a
-                href={`https://wa.me/6281234567890?text=${encodeURIComponent(
-                  `Halo Admin TPQ Anfak Al Azizah, saya ingin konfirmasi pendaftaran santri baru atas nama: ${successData.nama_lengkap} (No. Registrasi: ${successData.nomor_pendaftaran}).`
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-md transition-all"
+              <button 
+                type="button" 
+                className="btn-primary" 
+                onClick={() => navigate('/login')}
               >
-                <Send size={18} /> Konfirmasi via WhatsApp
-              </a>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSuccessData(null);
-                  setFormData({
-                    nama_lengkap: '',
-                    nama_panggilan: '',
-                    jenis_kelamin: 'L',
-                    tempat_lahir: '',
-                    tanggal_lahir: '',
-                    alamat: '',
-                    nama_ayah: '',
-                    nama_ibu: '',
-                    no_hp: '',
-                    kelas_id: '',
-                    catatan: ''
-                  });
-                }}
-                className="px-5 py-3 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm transition-all"
-              >
-                Daftar Lagi
+                Kembali ke Halaman Login
               </button>
             </div>
           </div>
         ) : (
-          /* Formulir Pendaftaran */
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 sm:p-10 shadow-2xl border-b-4 border-amber-400">
+          /* FORM PENDAFTARAN */
+          <div className="card" style={{ padding: '36px 30px', borderTop: '4px solid var(--color-gold)' }}>
+            
             {/* Header Form */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold mb-3">
-                <Sparkles size={14} className="text-amber-500" /> Penerimaan Santri Baru TPQ
+            <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                backgroundColor: '#fef3c7',
+                color: '#92400e',
+                padding: '4px 12px',
+                borderRadius: '16px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                marginBottom: '8px'
+              }}>
+                <Sparkles size={14} color="#d97706" /> Penerimaan Santri Baru Online
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-emerald-950 font-serif">
+              <h1 style={{ fontSize: '26px', color: 'var(--color-primary-container)', margin: '4px 0' }}>
                 Formulir Pendaftaran Santri Baru
               </h1>
-              <p className="text-slate-500 text-sm mt-1">
-                TPQ Anfak Al Azizah — Silakan isi identitas calon santri dengan lengkap dan benar.
+              <p style={{ fontSize: '13px', color: '#64748b', margin: 0 }}>
+                TPQ Anfak Al Azizah — Silakan isi biodata calon santri dengan lengkap
               </p>
             </div>
 
             {errorMessage && (
-              <div className="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-3">
-                <span className="font-semibold">Perhatian:</span> {errorMessage}
+              <div className="error-message">
+                {errorMessage}
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* BAGIAN 1: IDENTITAS CALON SANTRI */}
-              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <User size={16} className="text-emerald-600" /> 1. Data Diri Calon Santri
+            <form onSubmit={handleSubmit}>
+              
+              {/* BAGIAN 1: DATA CALON SANTRI */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
+                  1. Data Diri Calon Santri
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nama Lengkap Santri <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      name="nama_lengkap"
-                      value={formData.nama_lengkap}
-                      onChange={handleChange}
-                      placeholder="Masukkan nama lengkap calon santri"
-                      required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+                <div className="form-group">
+                  <label className="form-label">Nama Lengkap Santri <span style={{ color: 'red' }}>*</span></label>
+                  <input 
+                    type="text" 
+                    name="nama_lengkap" 
+                    value={formData.nama_lengkap} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Masukkan nama lengkap calon santri" 
+                    required 
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Nama Panggilan</label>
+                    <input 
+                      type="text" 
+                      name="nama_panggilan" 
+                      value={formData.nama_panggilan} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Contoh: Faras" 
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nama Panggilan
-                    </label>
-                    <input
-                      type="text"
-                      name="nama_panggilan"
-                      value={formData.nama_panggilan}
-                      onChange={handleChange}
-                      placeholder="Contoh: Faras"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Jenis Kelamin <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="flex gap-4 mt-1">
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="jenis_kelamin"
-                          value="L"
-                          checked={formData.jenis_kelamin === 'L'}
-                          onChange={handleChange}
-                          className="text-emerald-600 focus:ring-emerald-500"
+                  <div className="form-group">
+                    <label className="form-label">Jenis Kelamin <span style={{ color: 'red' }}>*</span></label>
+                    <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
+                        <input 
+                          type="radio" 
+                          name="jenis_kelamin" 
+                          value="L" 
+                          checked={formData.jenis_kelamin === 'L'} 
+                          onChange={handleChange} 
                         />
                         Laki-Laki
                       </label>
-                      <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="jenis_kelamin"
-                          value="P"
-                          checked={formData.jenis_kelamin === 'P'}
-                          onChange={handleChange}
-                          className="text-emerald-600 focus:ring-emerald-500"
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', cursor: 'pointer' }}>
+                        <input 
+                          type="radio" 
+                          name="jenis_kelamin" 
+                          value="P" 
+                          checked={formData.jenis_kelamin === 'P'} 
+                          onChange={handleChange} 
                         />
                         Perempuan
                       </label>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Tempat Lahir
-                    </label>
-                    <input
-                      type="text"
-                      name="tempat_lahir"
-                      value={formData.tempat_lahir}
-                      onChange={handleChange}
-                      placeholder="Kota / Kabupaten lahir"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+                  <div className="form-group">
+                    <label className="form-label">Tempat Lahir</label>
+                    <input 
+                      type="text" 
+                      name="tempat_lahir" 
+                      value={formData.tempat_lahir} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Kota lahir" 
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Tanggal Lahir
-                    </label>
-                    <input
-                      type="date"
-                      name="tanggal_lahir"
-                      value={formData.tanggal_lahir}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Alamat Tempat Tinggal
-                    </label>
-                    <textarea
-                      name="alamat"
-                      rows={2}
-                      value={formData.alamat}
-                      onChange={handleChange}
-                      placeholder="Dusun / RT / RW / Desa / Kecamatan"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+                  <div className="form-group">
+                    <label className="form-label">Tanggal Lahir</label>
+                    <input 
+                      type="date" 
+                      name="tanggal_lahir" 
+                      value={formData.tanggal_lahir} 
+                      onChange={handleChange} 
+                      className="input-field" 
                     />
                   </div>
                 </div>
+
+                <div className="form-group">
+                  <label className="form-label">Alamat Tempat Tinggal</label>
+                  <textarea 
+                    name="alamat" 
+                    rows={2} 
+                    value={formData.alamat} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Dusun / Desa / RT RW / Kecamatan" 
+                  />
+                </div>
               </div>
 
-              {/* BAGIAN 2: DATA ORANG TUA / WALI */}
-              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Phone size={16} className="text-emerald-600" /> 2. Data Orang Tua & Kontak
+              {/* BAGIAN 2: DATA ORANG TUA */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
+                  2. Data Orang Tua / Wali & Kontak
                 </h3>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nama Ayah Kandung
-                    </label>
-                    <input
-                      type="text"
-                      name="nama_ayah"
-                      value={formData.nama_ayah}
-                      onChange={handleChange}
-                      placeholder="Nama ayah calon santri"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Nama Ayah Kandung</label>
+                    <input 
+                      type="text" 
+                      name="nama_ayah" 
+                      value={formData.nama_ayah} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Nama ayah" 
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nama Ibu Kandung
-                    </label>
-                    <input
-                      type="text"
-                      name="nama_ibu"
-                      value={formData.nama_ibu}
-                      onChange={handleChange}
-                      placeholder="Nama ibu calon santri"
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
+                  <div className="form-group">
+                    <label className="form-label">Nama Ibu Kandung</label>
+                    <input 
+                      type="text" 
+                      name="nama_ibu" 
+                      value={formData.nama_ibu} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Nama ibu" 
                     />
                   </div>
+                </div>
 
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      No. WhatsApp / HP Aktif <span className="text-rose-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-3 text-emerald-600 font-semibold text-sm">
-                        +62 / 0
-                      </span>
-                      <input
-                        type="tel"
-                        name="no_hp"
-                        value={formData.no_hp}
-                        onChange={handleChange}
-                        placeholder="Contoh: 081234567890"
-                        required
-                        className="w-full pl-20 pr-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm font-medium"
-                      />
-                    </div>
-                    <span className="text-[11px] text-slate-500 mt-1 block">
-                      Nomor ini akan digunakan pengurus untuk konfirmasi dan informasi TPQ.
-                    </span>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">No. WhatsApp / HP Aktif <span style={{ color: 'red' }}>*</span></label>
+                  <input 
+                    type="tel" 
+                    name="no_hp" 
+                    value={formData.no_hp} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Contoh: 081234567890" 
+                    required 
+                    style={{ fontSize: '15px', fontWeight: 'bold' }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '4px' }}>
+                    Nomor WhatsApp ini digunakan panitia untuk konfirmasi jadwal tes penempatan & informasi TPQ.
+                  </span>
                 </div>
               </div>
 
-              {/* BAGIAN 3: PILIHAN TINGKAT / KELAS */}
-              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200">
-                <h3 className="text-sm font-bold text-emerald-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <BookOpen size={16} className="text-emerald-600" /> 3. Pilihan Kelas & Catatan
+              {/* BAGIAN 3: PILIHAN TINGKAT */}
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
+                  3. Pilihan Jenjang & Keterangan
                 </h3>
 
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Pilihan Tingkat / Jilid Awal (Opsional)
-                    </label>
-                    <select
-                      name="kelas_id"
-                      value={formData.kelas_id}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-                    >
-                      <option value="">-- Rekomendasi berdasarkan tes penempatan nanti --</option>
-                      {kelasList.map(k => (
-                        <option key={k.id} value={k.id}>{k.nama_kelas}</option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Pilihan Jenjang / Jilid Awal (Opsional)</label>
+                  <select 
+                    name="kelas_id" 
+                    value={formData.kelas_id} 
+                    onChange={handleChange} 
+                    className="input-field"
+                  >
+                    <option value="">-- Rekomendasi berdasarkan tes penempatan --</option>
+                    {kelasList.map(k => (
+                      <option key={k.id} value={k.id}>Kelas {k.nama_kelas}</option>
+                    ))}
+                  </select>
+                </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Catatan / Kemampuan Mengaji Saat Ini
-                    </label>
-                    <textarea
-                      name="catatan"
-                      rows={2}
-                      value={formData.catatan}
-                      onChange={handleChange}
-                      placeholder="Contoh: Sudah pernah belajar Iqro 2 di rumah, mengenal huruf hijaiyah, dll."
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white text-sm"
-                    />
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">Catatan / Kemampuan Mengaji Saat Ini</label>
+                  <textarea 
+                    name="catatan" 
+                    rows={2} 
+                    value={formData.catatan} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Contoh: Sudah pernah belajar Iqro 2, mengenal huruf hijaiyah, dll." 
+                  />
                 </div>
               </div>
 
-              {/* Tombol Submit */}
-              <button
-                type="submit"
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                className="btn-primary w-full" 
+                style={{ padding: '14px', fontSize: '16px', fontWeight: 'bold' }}
                 disabled={submitting}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-700 via-emerald-600 to-teal-600 hover:from-emerald-800 hover:to-teal-700 text-white font-bold text-base shadow-lg shadow-emerald-700/30 flex items-center justify-center gap-2 transition-all transform active:scale-[0.99]"
               >
                 {submitting ? (
                   <>
-                    <Loader2 size={20} className="animate-spin" /> Sedang Mengirim Formulir...
+                    <Loader2 size={18} className="animate-spin" /> Sedang Mengirim Formulir...
                   </>
                 ) : (
                   <>
-                    <UserPlus size={20} /> Kirim Pendaftaran Santri Baru
+                    <UserPlus size={18} /> Kirim Pendaftaran Santri Baru
                   </>
                 )}
               </button>
             </form>
+
           </div>
         )}
+
       </div>
     </div>
   );
