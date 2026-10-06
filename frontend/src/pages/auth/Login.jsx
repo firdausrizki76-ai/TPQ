@@ -43,32 +43,6 @@ const Login = () => {
   return (
     <div className="login-container flex items-center justify-center min-h-screen p-4">
       <div className="login-wrapper w-full flex flex-col items-center">
-        {/* BANNER GEDE PENDAFTARAN SANTRI BARU */}
-        <div 
-          onClick={() => navigate('/daftar')}
-          role="button"
-          tabIndex={0}
-          className="pendaftaran-banner-card"
-        >
-          <div className="pendaftaran-banner-icon">
-            <UserPlus size={24} />
-          </div>
-          <div className="pendaftaran-banner-content">
-            <span className="pendaftaran-banner-tag">
-              Penerimaan Santri Baru
-            </span>
-            <h3 className="pendaftaran-banner-title">
-              Pendaftaran Santri Baru <span>Klik Disini</span>
-            </h3>
-            <p className="pendaftaran-banner-sub">
-              Daftar online santri baru TPQ Anfak Al Azizah
-            </p>
-          </div>
-          <div className="pendaftaran-banner-arrow">
-            <ArrowRight size={20} />
-          </div>
-        </div>
-
         {/* Logo moved to center */}
         <div className="login-logo-center">
           <img src="/assets/logoapp.png" alt="Logo TPQ Anfak Al Azizah" className="logo" />
@@ -146,6 +120,32 @@ const Login = () => {
               {loading ? <Loader2 size={18} className="animate-spin" /> : <>Masuk <ArrowRight size={18} /></>}
             </button>
           </form>
+        </div>
+
+        {/* BANNER GEDE PENDAFTARAN SANTRI BARU (DITARUH DI BAGIAN BAWAH) */}
+        <div 
+          onClick={() => navigate('/daftar')}
+          role="button"
+          tabIndex={0}
+          className="pendaftaran-banner-card"
+        >
+          <div className="pendaftaran-banner-icon">
+            <UserPlus size={24} />
+          </div>
+          <div className="pendaftaran-banner-content">
+            <span className="pendaftaran-banner-tag">
+              Penerimaan Santri Baru
+            </span>
+            <h3 className="pendaftaran-banner-title">
+              Pendaftaran Santri Baru <span>Klik Disini</span>
+            </h3>
+            <p className="pendaftaran-banner-sub">
+              Daftar online santri baru TPQ Anfak Al Azizah
+            </p>
+          </div>
+          <div className="pendaftaran-banner-arrow">
+            <ArrowRight size={20} />
+          </div>
         </div>
       </div>
     </div>

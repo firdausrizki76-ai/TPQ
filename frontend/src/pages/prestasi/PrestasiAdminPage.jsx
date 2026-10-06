@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   Award, Search, Filter, Calendar, Printer, Download, Eye, 
   Trash2, Edit, Plus, BookOpen, CheckCircle2, User, Loader2, 
-  Sparkles, RefreshCw, X, ChevronRight, Bookmark, Check
+  Sparkles, RefreshCw, X, ChevronRight, Bookmark, Check, Tag
 } from 'lucide-react';
-import { prestasiAPI, kelasAPI } from '../../services/api';
+import { prestasiAPI, kelasAPI, pengaturanAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
 
 const PrestasiAdminPage = () => {
@@ -15,6 +15,16 @@ const PrestasiAdminPage = () => {
   const [historyList, setHistoryList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Category Management State
+  const [kategoriList, setKategoriList] = useState([
+    'Qiraati', 'Tahfidz', 'Tahsin', 'Doa Harian', 'Hadits', 'Praktik Ibadah', 'Adab & Akhlak'
+  ]);
+  const [showKategoriModal, setShowKategoriModal] = useState(false);
+  const [newCatInput, setNewCatInput] = useState('');
+  const [editingCatIndex, setEditingCatIndex] = useState(null);
+  const [editingCatValue, setEditingCatValue] = useState('');
+  const [savingCat, setSavingCat] = useState(false);
 
   // Filters for History
   const [filterTanggal, setFilterTanggal] = useState('');
@@ -40,6 +50,7 @@ const PrestasiAdminPage = () => {
 
   useEffect(() => {
     loadInitialData();
+    loadKategori();
   }, []);
 
   useEffect(() => {
@@ -62,6 +73,94 @@ const PrestasiAdminPage = () => {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadKategori = async () => {
+    try {
+      const settings = await pengaturanAPI.get();
+      if (settings?.kategori_prestasi) {
+        try {
+          const parsed = JSON.parse(settings.kategori_prestasi);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setKategoriList(parsed);
+          }
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.error('Gagal memuat kategori prestasi:', e);
+    }
+  };
+
+  const handleSaveKategoriList = async (newList) => {
+    setSavingCat(true);
+    try {
+      await pengaturanAPI.save({ kategori_prestasi: JSON.stringify(newList) });
+      setKategoriList(newList);
+      return true;
+    } catch (e) {
+      alert('Gagal menyimpan kategori: ' + e.message);
+      return false;
+    } finally {
+      setSavingCat(false);
+    }
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    const val = newCatInput.trim();
+    if (!val) return;
+    if (kategoriList.some(c => c.toLowerCase() === val.toLowerCase())) {
+      alert('Kategori dengan nama tersebut sudah ada.');
+      return;
+    }
+    const updated = [...kategoriList, val];
+    const success = await handleSaveKategoriList(updated);
+    if (success) setNewCatInput('');
+  };
+
+  const handleStartEdit = (index, val) => {
+    setEditingCatIndex(index);
+    setEditingCatValue(val);
+  };
+
+  const handleSaveEdit = async (index) => {
+    const val = editingCatValue.trim();
+    if (!val) {
+      alert('Nama kategori tidak boleh kosong.');
+      return;
+    }
+    const oldVal = kategoriList[index];
+    if (val === oldVal) {
+      setEditingCatIndex(null);
+      return;
+    }
+    if (kategoriList.some((c, i) => i !== index && c.toLowerCase() === val.toLowerCase())) {
+      alert('Kategori dengan nama tersebut sudah ada.');
+      return;
+    }
+    const updated = [...kategoriList];
+    updated[index] = val;
+    const success = await handleSaveKategoriList(updated);
+    if (success) {
+      setEditingCatIndex(null);
+      setEditingCatValue('');
+      if (inputForm.kategori === oldVal) {
+        setInputForm(prev => ({ ...prev, kategori: val }));
+      }
+    }
+  };
+
+  const handleDeleteCategory = async (catToDelete) => {
+    if (kategoriList.length <= 1) {
+      alert('Minimal harus ada 1 kategori tersisa.');
+      return;
+    }
+    if (!window.confirm(`Yakin ingin menghapus kategori "${catToDelete}"?`)) return;
+    const updated = kategoriList.filter(c => c !== catToDelete);
+    const success = await handleSaveKategoriList(updated);
+    if (success && inputForm.kategori === catToDelete) {
+      setInputForm(prev => ({ ...prev, kategori: updated[0] }));
     }
   };
 
@@ -172,7 +271,14 @@ const PrestasiAdminPage = () => {
           <h1 className="page-title">Prestasi & Rapot Santri</h1>
           <p className="page-subtitle">Rekapitulasi pencapaian harian, mutaba'ah mengaji, hafalan, dan cetak rapot santri</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button 
+            className="btn-primary" 
+            style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }}
+            onClick={() => setShowKategoriModal(true)}
+          >
+            <Tag size={16} /> Kelola Kategori
+          </button>
           <button 
             className="btn-primary" 
             style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }}
@@ -392,12 +498,9 @@ const PrestasiAdminPage = () => {
                   onChange={(e) => setFilterKategori(e.target.value)}
                 >
                   <option value="semua">Semua Kategori</option>
-                  <option value="Qiraati">Qiraati / Iqro</option>
-                  <option value="Tahfidz">Tahfidz / Surat</option>
-                  <option value="Doa Harian">Doa Sehari-Hari</option>
-                  <option value="Hadits">Hadits Pilihan</option>
-                  <option value="Praktik Ibadah">Praktik Ibadah</option>
-                  <option value="Adab & Akhlak">Adab & Akhlak</option>
+                  {kategoriList.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
                 </select>
               </div>
 
@@ -700,12 +803,9 @@ const PrestasiAdminPage = () => {
                       value={inputForm.kategori}
                       onChange={(e) => setInputForm(prev => ({ ...prev, kategori: e.target.value }))}
                     >
-                      <option value="Qiraati">Qiraati / Iqro</option>
-                      <option value="Tahfidz">Tahfidz / Surat</option>
-                      <option value="Doa Harian">Doa Sehari-Hari</option>
-                      <option value="Hadits">Hadits Pilihan</option>
-                      <option value="Praktik Ibadah">Praktik Ibadah</option>
-                      <option value="Adab & Akhlak">Adab & Akhlak</option>
+                      {kategoriList.map(cat => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -806,6 +906,130 @@ const PrestasiAdminPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL KELOLA KATEGORI PRESTASI */}
+      {showKategoriModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Kelola Kategori Prestasi</h2>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  Tambah, ubah nama, atau hapus kategori penilaian santri
+                </span>
+              </div>
+              <X className="modal-close" onClick={() => { setShowKategoriModal(false); setEditingCatIndex(null); }} />
+            </div>
+
+            <div className="modal-body">
+              {/* Form Tambah Kategori */}
+              <form onSubmit={handleAddCategory} style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Ketik nama kategori baru..." 
+                  value={newCatInput} 
+                  onChange={(e) => setNewCatInput(e.target.value)} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  disabled={savingCat || !newCatInput.trim()}
+                  style={{ flexShrink: 0 }}
+                >
+                  {savingCat ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Tambah
+                </button>
+              </form>
+
+              {/* List Kategori */}
+              <div style={{ maxHeight: '320px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>No</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>Nama Kategori</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', width: '110px' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {kategoriList.map((cat, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 12px', color: '#64748b' }}>{idx + 1}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          {editingCatIndex === idx ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                value={editingCatValue} 
+                                onChange={(e) => setEditingCatValue(e.target.value)}
+                                autoFocus
+                                style={{ padding: '4px 8px', fontSize: '13px' }}
+                              />
+                              <button 
+                                type="button" 
+                                className="btn-primary" 
+                                style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#059669' }}
+                                onClick={() => handleSaveEdit(idx)}
+                                title="Simpan Nama Kategori"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', padding: '4px' }}
+                                onClick={() => setEditingCatIndex(null)}
+                                title="Batal"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>{cat}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {editingCatIndex !== idx && (
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#0284c7', cursor: 'pointer', padding: '6px' }}
+                                onClick={() => handleStartEdit(idx, cat)}
+                                title="Edit Nama Kategori"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: '6px' }}
+                                onClick={() => handleDeleteCategory(cat)}
+                                title="Hapus Kategori"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="btn-primary" 
+                style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}
+                onClick={() => { setShowKategoriModal(false); setEditingCatIndex(null); }}
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

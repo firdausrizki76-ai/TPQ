@@ -20,7 +20,14 @@ const PendaftaranPage = () => {
     jenis_kelamin: 'L',
     tempat_lahir: '',
     tanggal_lahir: '',
+    hobi: '',
+    cita_cita: '',
     alamat: '',
+    rt: '',
+    rw: '',
+    desa: '',
+    kecamatan: '',
+    kabupaten: '',
     nama_ayah: '',
     nama_ibu: '',
     no_hp: '',
@@ -157,19 +164,38 @@ const PendaftaranPage = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '13px' }}>
                 <div>
                   <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Nama Santri:</span>
-                  <strong>{successData.nama_lengkap}</strong>
+                  <strong>{successData.nama_lengkap} {successData.nama_panggilan ? `(${successData.nama_panggilan})` : ''}</strong>
                 </div>
                 <div>
                   <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Jenis Kelamin:</span>
                   <strong>{successData.jenis_kelamin === 'L' ? 'Laki-Laki' : 'Perempuan'}</strong>
                 </div>
                 <div>
-                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Orang Tua:</span>
-                  <strong>{successData.nama_ayah || successData.nama_ibu || '-'}</strong>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Tempat, Tgl Lahir:</span>
+                  <strong>{successData.tempat_lahir || '-'}, {successData.tanggal_lahir || '-'}</strong>
                 </div>
                 <div>
-                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>WhatsApp:</span>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Hobi / Cita-cita:</span>
+                  <strong>{successData.hobi || '-'} / {successData.cita_cita || '-'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Ayah / Ibu Kandung:</span>
+                  <strong>{successData.nama_ayah || '-'} / {successData.nama_ibu || '-'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Nomor WhatsApp:</span>
                   <strong style={{ color: '#059669' }}>{successData.no_hp}</strong>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Alamat & Domisili:</span>
+                  <strong>
+                    {successData.alamat ? `${successData.alamat}, ` : ''}
+                    {successData.rt ? `RT ${successData.rt} ` : ''}
+                    {successData.rw ? `RW ${successData.rw}, ` : ''}
+                    {successData.desa ? `Desa ${successData.desa}, ` : ''}
+                    {successData.kecamatan ? `Kec. ${successData.kecamatan}, ` : ''}
+                    {successData.kabupaten ? successData.kabupaten : ''}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -310,25 +336,120 @@ const PendaftaranPage = () => {
                       className="input-field" 
                     />
                   </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Hobi</label>
+                    <input 
+                      type="text" 
+                      name="hobi" 
+                      value={formData.hobi} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Contoh: Membaca, Menggambar" 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Cita-cita</label>
+                    <input 
+                      type="text" 
+                      name="cita_cita" 
+                      value={formData.cita_cita} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Contoh: Guru, Dokter, Hafiz Qur'an" 
+                    />
+                  </div>
                 </div>
+              </div>
+
+              {/* BAGIAN 2: ALAMAT & DOMISILI */}
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
+                  2. Alamat & Tempat Tinggal
+                </h3>
 
                 <div className="form-group">
-                  <label className="form-label">Alamat Tempat Tinggal</label>
+                  <label className="form-label">Alamat (Jalan / Dusun / Gang)</label>
                   <textarea 
                     name="alamat" 
                     rows={2} 
                     value={formData.alamat} 
                     onChange={handleChange} 
                     className="input-field" 
-                    placeholder="Dusun / Desa / RT RW / Kecamatan" 
+                    placeholder="Contoh: Jl. Pesantren No. 12, Dusun Krajan" 
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                  <div className="form-group">
+                    <label className="form-label">RT</label>
+                    <input 
+                      type="text" 
+                      name="rt" 
+                      value={formData.rt} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Contoh: 02" 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">RW</label>
+                    <input 
+                      type="text" 
+                      name="rw" 
+                      value={formData.rw} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Contoh: 05" 
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Desa / Kelurahan</label>
+                    <input 
+                      type="text" 
+                      name="desa" 
+                      value={formData.desa} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Nama desa/kelurahan" 
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Kecamatan</label>
+                    <input 
+                      type="text" 
+                      name="kecamatan" 
+                      value={formData.kecamatan} 
+                      onChange={handleChange} 
+                      className="input-field" 
+                      placeholder="Nama kecamatan" 
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Kabupaten / Kota</label>
+                  <input 
+                    type="text" 
+                    name="kabupaten" 
+                    value={formData.kabupaten} 
+                    onChange={handleChange} 
+                    className="input-field" 
+                    placeholder="Nama kabupaten/kota" 
                   />
                 </div>
               </div>
 
-              {/* BAGIAN 2: DATA ORANG TUA */}
+              {/* BAGIAN 3: DATA ORANG TUA */}
               <div style={{ marginBottom: '20px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
-                  2. Data Orang Tua / Wali & Kontak
+                  3. Data Orang Tua & Kontak
                 </h3>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
@@ -340,7 +461,7 @@ const PendaftaranPage = () => {
                       value={formData.nama_ayah} 
                       onChange={handleChange} 
                       className="input-field" 
-                      placeholder="Nama ayah" 
+                      placeholder="Nama ayah kandung" 
                     />
                   </div>
 
@@ -352,13 +473,13 @@ const PendaftaranPage = () => {
                       value={formData.nama_ibu} 
                       onChange={handleChange} 
                       className="input-field" 
-                      placeholder="Nama ibu" 
+                      placeholder="Nama ibu kandung" 
                     />
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">No. WhatsApp / HP Aktif <span style={{ color: 'red' }}>*</span></label>
+                  <label className="form-label">Nomor WhatsApp <span style={{ color: 'red' }}>*</span></label>
                   <input 
                     type="tel" 
                     name="no_hp" 
@@ -375,10 +496,10 @@ const PendaftaranPage = () => {
                 </div>
               </div>
 
-              {/* BAGIAN 3: PILIHAN TINGKAT */}
+              {/* BAGIAN 4: PILIHAN TINGKAT */}
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary-container)', borderBottom: '2px solid #e2e8f0', paddingBottom: '6px', marginBottom: '14px' }}>
-                  3. Pilihan Jenjang & Keterangan
+                  4. Pilihan Jenjang & Keterangan (Opsional)
                 </h3>
 
                 <div className="form-group">

@@ -3,9 +3,9 @@ import {
   DollarSign, TrendingUp, TrendingDown, Wallet, Calendar, 
   Plus, Search, Filter, Printer, Download, Trash2, Edit, 
   CheckCircle2, AlertCircle, RefreshCw, X, ArrowUpRight, ArrowDownRight,
-  FileSpreadsheet, Loader2, ArrowUpCircle, ArrowDownCircle
+  FileSpreadsheet, Loader2, ArrowUpCircle, ArrowDownCircle, Tag, Check
 } from 'lucide-react';
-import { transaksiKeuanganAPI } from '../../services/api';
+import { transaksiKeuanganAPI, pengaturanAPI } from '../../services/api';
 import * as XLSX from 'xlsx';
 import '../dashboard/Dashboard.css';
 
@@ -14,6 +14,7 @@ const LaporanKeuanganPage = () => {
   const [summary, setSummary] = useState({
     totalPemasukan: 0,
     totalPengeluaran: 0,
+    totalSyahriah: 0,
     saldoKas: 0,
     totalTransaksi: 0
   });
@@ -27,6 +28,7 @@ const LaporanKeuanganPage = () => {
   const [filterSampai, setFilterSampai] = useState('');
   const [filterTipe, setFilterTipe] = useState('semua');
   const [search, setSearch] = useState('');
+  const [includeSyahriah, setIncludeSyahriah] = useState(true);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -42,16 +44,18 @@ const LaporanKeuanganPage = () => {
     metode: 'tunai'
   });
 
-  const kategoriPemasukan = [
+  // Dynamic Categories State
+  const [kategoriPemasukan, setKategoriPemasukan] = useState([
     'Infaq / Shodaqoh',
     'Donasi Donatur',
     'Biaya Pendaftaran Santri',
     'Bantuan Operasional (BOP)',
     'Penjualan Buku / Seragam',
+    'Syahriah Santri',
     'Lain-lain'
-  ];
+  ]);
 
-  const kategoriPengeluaran = [
+  const [kategoriPengeluaran, setKategoriPengeluaran] = useState([
     'Honor / Gaji Guru & Ustadz',
     'ATK, Modul & Cetak',
     'Operasional Listrik, Air & Wi-Fi',
@@ -59,17 +63,130 @@ const LaporanKeuanganPage = () => {
     'Perawatan & Sarana Gedung',
     'Kegiatan & Acara TPQ',
     'Lain-lain'
-  ];
+  ]);
+
+  // Category Modal State
+  const [showKategoriModal, setShowKategoriModal] = useState(false);
+  const [activeKategoriTab, setActiveKategoriTab] = useState('pemasukan'); // 'pemasukan' | 'pengeluaran'
+  const [newCatInput, setNewCatInput] = useState('');
+  const [editingCatIndex, setEditingCatIndex] = useState(null);
+  const [editingCatValue, setEditingCatValue] = useState('');
+  const [savingCategory, setSavingCategory] = useState(false);
+
+  useEffect(() => {
+    loadKategori();
+  }, []);
 
   useEffect(() => {
     loadData();
-  }, [filterMode, filterBulan, filterTahun, filterDari, filterSampai, filterTipe]);
+  }, [filterMode, filterBulan, filterTahun, filterDari, filterSampai, filterTipe, includeSyahriah]);
+
+  const loadKategori = async () => {
+    try {
+      const settings = await pengaturanAPI.get();
+      if (settings?.kategori_kas_masuk) {
+        try {
+          const parsed = JSON.parse(settings.kategori_kas_masuk);
+          if (Array.isArray(parsed) && parsed.length > 0) setKategoriPemasukan(parsed);
+        } catch (_) {}
+      }
+      if (settings?.kategori_kas_keluar) {
+        try {
+          const parsed = JSON.parse(settings.kategori_kas_keluar);
+          if (Array.isArray(parsed) && parsed.length > 0) setKategoriPengeluaran(parsed);
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.error('Gagal memuat kategori kas:', e);
+    }
+  };
+
+  const handleSaveCategories = async (tipe, newList) => {
+    setSavingCategory(true);
+    try {
+      if (tipe === 'pemasukan') {
+        await pengaturanAPI.save({ kategori_kas_masuk: JSON.stringify(newList) });
+        setKategoriPemasukan(newList);
+      } else {
+        await pengaturanAPI.save({ kategori_kas_keluar: JSON.stringify(newList) });
+        setKategoriPengeluaran(newList);
+      }
+      return true;
+    } catch (e) {
+      alert('Gagal menyimpan kategori: ' + e.message);
+      return false;
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleAddKategori = async (e) => {
+    e.preventDefault();
+    const val = newCatInput.trim();
+    if (!val) return;
+    const currentList = activeKategoriTab === 'pemasukan' ? kategoriPemasukan : kategoriPengeluaran;
+    if (currentList.some(c => c.toLowerCase() === val.toLowerCase())) {
+      alert('Kategori tersebut sudah ada.');
+      return;
+    }
+    const updated = [...currentList, val];
+    const ok = await handleSaveCategories(activeKategoriTab, updated);
+    if (ok) setNewCatInput('');
+  };
+
+  const handleStartEditCat = (index, val) => {
+    setEditingCatIndex(index);
+    setEditingCatValue(val);
+  };
+
+  const handleSaveEditCat = async (index) => {
+    const val = editingCatValue.trim();
+    if (!val) {
+      alert('Nama kategori tidak boleh kosong.');
+      return;
+    }
+    const currentList = activeKategoriTab === 'pemasukan' ? kategoriPemasukan : kategoriPengeluaran;
+    const oldVal = currentList[index];
+    if (val === oldVal) {
+      setEditingCatIndex(null);
+      return;
+    }
+    if (currentList.some((c, i) => i !== index && c.toLowerCase() === val.toLowerCase())) {
+      alert('Kategori dengan nama tersebut sudah ada.');
+      return;
+    }
+    const updated = [...currentList];
+    updated[index] = val;
+    const ok = await handleSaveCategories(activeKategoriTab, updated);
+    if (ok) {
+      setEditingCatIndex(null);
+      setEditingCatValue('');
+      if (form.kategori === oldVal) {
+        setForm(prev => ({ ...prev, kategori: val }));
+      }
+    }
+  };
+
+  const handleDeleteCat = async (catToDelete) => {
+    const currentList = activeKategoriTab === 'pemasukan' ? kategoriPemasukan : kategoriPengeluaran;
+    if (currentList.length <= 1) {
+      alert('Minimal harus ada 1 kategori tersisa.');
+      return;
+    }
+    if (!window.confirm(`Yakin ingin menghapus kategori "${catToDelete}"?`)) return;
+    const updated = currentList.filter(c => c !== catToDelete);
+    const ok = await handleSaveCategories(activeKategoriTab, updated);
+    if (ok && form.kategori === catToDelete) {
+      setForm(prev => ({ ...prev, kategori: updated[0] }));
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
     try {
       const params = {};
       if (filterTipe !== 'semua') params.tipe = filterTipe;
+      params.include_syahriah = includeSyahriah ? 'true' : 'false';
       
       if (filterMode === 'harian') {
         if (filterDari) params.dari = filterDari;
@@ -84,6 +201,7 @@ const LaporanKeuanganPage = () => {
       setSummary({
         totalPemasukan: res?.totalPemasukan || 0,
         totalPengeluaran: res?.totalPengeluaran || 0,
+        totalSyahriah: res?.totalSyahriah || 0,
         saldoKas: res?.saldoKas || 0,
         totalTransaksi: res?.totalTransaksi || 0
       });
@@ -264,6 +382,13 @@ const LaporanKeuanganPage = () => {
           <button 
             className="btn-primary" 
             style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} 
+            onClick={() => setShowKategoriModal(true)}
+          >
+            <Tag size={16} /> Kelola Kategori
+          </button>
+          <button 
+            className="btn-primary" 
+            style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} 
             onClick={handleExportExcel}
           >
             <FileSpreadsheet size={16} /> Export Excel
@@ -295,7 +420,14 @@ const LaporanKeuanganPage = () => {
           <div className="stat-value" style={{ color: '#16a34a' }}>
             {formatRp(summary.totalPemasukan)}
           </div>
-          <div className="stat-subtext">Kas Masuk Periode Ini</div>
+          <div className="stat-subtext">
+            Kas Masuk Periode Ini
+            {summary.totalSyahriah > 0 && (
+              <span style={{ display: 'block', color: '#15803d', fontWeight: 'bold', fontSize: '11px', marginTop: '2px' }}>
+                (Syahriah: {formatRp(summary.totalSyahriah)})
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="card stat-card" style={{ padding: '20px' }}>
@@ -427,6 +559,29 @@ const LaporanKeuanganPage = () => {
                 <option value="pengeluaran">Hanya Pengeluaran</option>
               </select>
             </div>
+
+            {/* Toggle Sinkronisasi Syahriah */}
+            <label style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              fontSize: '12px', 
+              fontWeight: '600', 
+              color: includeSyahriah ? '#15803d' : '#64748b', 
+              cursor: 'pointer', 
+              padding: '8px 12px', 
+              backgroundColor: includeSyahriah ? '#f0fdf4' : '#f8fafc', 
+              border: includeSyahriah ? '1px solid #86efac' : '1px solid #cbd5e1', 
+              borderRadius: '10px',
+              userSelect: 'none'
+            }}>
+              <input 
+                type="checkbox" 
+                checked={includeSyahriah} 
+                onChange={(e) => setIncludeSyahriah(e.target.checked)} 
+              />
+              Sinkronkan Pembayaran Syahriah
+            </label>
           </div>
 
           <div className="input-with-icon" style={{ maxWidth: '280px', width: '100%' }}>
@@ -484,7 +639,14 @@ const LaporanKeuanganPage = () => {
                       </span>
                     </td>
                     <td style={{ fontWeight: '600', color: 'var(--color-primary-container)' }}>
-                      {item.kategori}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                        <span>{item.kategori}</span>
+                        {item.is_syahriah && (
+                          <span className="badge badge-success" style={{ fontSize: '10px', padding: '2px 6px' }}>
+                            Auto Sync
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ fontSize: '13px' }}>
                       {item.keterangan || '-'}
@@ -499,22 +661,28 @@ const LaporanKeuanganPage = () => {
                       {item.penanggung_jawab || '-'}
                     </td>
                     <td className="text-center">
-                      <div className="flex justify-center gap-1">
-                        <button 
-                          style={{ border: 'none', background: 'transparent', color: '#ea580c', cursor: 'pointer', padding: '6px' }}
-                          onClick={() => handleOpenEdit(item)}
-                          title="Edit Transaksi"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button 
-                          style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: '6px' }}
-                          onClick={() => handleDelete(item.id)}
-                          title="Hapus Transaksi"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+                      {item.is_syahriah ? (
+                        <span style={{ fontSize: '11px', color: '#059669', fontStyle: 'italic', fontWeight: 'bold' }}>
+                          Sinkron Syahriah
+                        </span>
+                      ) : (
+                        <div className="flex justify-center gap-1">
+                          <button 
+                            style={{ border: 'none', background: 'transparent', color: '#ea580c', cursor: 'pointer', padding: '6px' }}
+                            onClick={() => handleOpenEdit(item)}
+                            title="Edit Transaksi"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button 
+                            style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: '6px' }}
+                            onClick={() => handleDelete(item.id)}
+                            title="Hapus Transaksi"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -677,6 +845,166 @@ const LaporanKeuanganPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* MODAL KELOLA KATEGORI KAS */}
+      {showKategoriModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div>
+                <h2 className="modal-title">Kelola Kategori Kas</h2>
+                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                  Tambah, ubah nama, atau hapus kategori kas TPQ
+                </span>
+              </div>
+              <X className="modal-close" onClick={() => { setShowKategoriModal(false); setEditingCatIndex(null); }} />
+            </div>
+
+            <div className="modal-body">
+              {/* Tab Selector Pemasukan vs Pengeluaran */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setActiveKategoriTab('pemasukan'); setEditingCatIndex(null); }}
+                  style={{
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: activeKategoriTab === 'pemasukan' ? '2px solid #16a34a' : '1px solid #cbd5e1',
+                    backgroundColor: activeKategoriTab === 'pemasukan' ? '#f0fdf4' : 'white',
+                    color: activeKategoriTab === 'pemasukan' ? '#15803d' : '#64748b',
+                    fontWeight: 'bold',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Kategori Pemasukan ({kategoriPemasukan.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveKategoriTab('pengeluaran'); setEditingCatIndex(null); }}
+                  style={{
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: activeKategoriTab === 'pengeluaran' ? '2px solid #dc2626' : '1px solid #cbd5e1',
+                    backgroundColor: activeKategoriTab === 'pengeluaran' ? '#fef2f2' : 'white',
+                    color: activeKategoriTab === 'pengeluaran' ? '#b91c1c' : '#64748b',
+                    fontWeight: 'bold',
+                    fontSize: '13px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Kategori Pengeluaran ({kategoriPengeluaran.length})
+                </button>
+              </div>
+
+              {/* Form Tambah Kategori */}
+              <form onSubmit={handleAddKategori} style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder={`Nama kategori ${activeKategoriTab} baru...`} 
+                  value={newCatInput} 
+                  onChange={(e) => setNewCatInput(e.target.value)} 
+                  style={{ flex: 1 }}
+                />
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  disabled={savingCategory || !newCatInput.trim()}
+                  style={activeKategoriTab === 'pengeluaran' ? { backgroundColor: '#dc2626', borderColor: '#b91c1c', flexShrink: 0 } : { flexShrink: 0 }}
+                >
+                  {savingCategory ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Tambah
+                </button>
+              </form>
+
+              {/* List Kategori Table */}
+              <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '12px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                      <th style={{ padding: '10px 12px', textAlign: 'left', width: '40px' }}>No</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'left' }}>Nama Kategori</th>
+                      <th style={{ padding: '10px 12px', textAlign: 'center', width: '110px' }}>Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activeKategoriTab === 'pemasukan' ? kategoriPemasukan : kategoriPengeluaran).map((cat, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px 12px', color: '#64748b' }}>{idx + 1}</td>
+                        <td style={{ padding: '10px 12px' }}>
+                          {editingCatIndex === idx ? (
+                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                              <input 
+                                type="text" 
+                                className="input-field" 
+                                value={editingCatValue} 
+                                onChange={(e) => setEditingCatValue(e.target.value)}
+                                autoFocus
+                                style={{ padding: '4px 8px', fontSize: '13px' }}
+                              />
+                              <button 
+                                type="button" 
+                                className="btn-primary" 
+                                style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#059669' }}
+                                onClick={() => handleSaveEditCat(idx)}
+                                title="Simpan Nama"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#64748b', cursor: 'pointer', padding: '4px' }}
+                                onClick={() => setEditingCatIndex(null)}
+                                title="Batal"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <span style={{ fontWeight: '600', color: '#1e293b' }}>{cat}</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          {editingCatIndex !== idx && (
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#0284c7', cursor: 'pointer', padding: '6px' }}
+                                onClick={() => handleStartEditCat(idx, cat)}
+                                title="Edit Nama Kategori"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button 
+                                type="button" 
+                                style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: '6px' }}
+                                onClick={() => handleDeleteCat(cat)}
+                                title="Hapus Kategori"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button 
+                type="button" 
+                className="btn-primary" 
+                style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}
+                onClick={() => { setShowKategoriModal(false); setEditingCatIndex(null); }}
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, Search, Filter, CheckCircle2, XCircle, Clock, 
   Eye, Trash2, Check, RefreshCw, Printer, AlertCircle, Phone, 
-  Calendar, BookOpen, MapPin, User, ArrowRight, Loader2, Download
+  Calendar, BookOpen, MapPin, User, ArrowRight, Loader2, Download, X
 } from 'lucide-react';
 import { pendaftaranAPI, kelasAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
@@ -376,6 +376,11 @@ const AdminPendaftaranPage = () => {
                     <td>{detailItem.tempat_lahir || '-'}, {detailItem.tanggal_lahir || '-'}</td>
                   </tr>
                   <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Hobi / Cita-cita</td>
+                    <td>:</td>
+                    <td>{detailItem.hobi || '-'} / {detailItem.cita_cita || '-'}</td>
+                  </tr>
+                  <tr>
                     <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Nama Ayah / Ibu</td>
                     <td>:</td>
                     <td>{detailItem.nama_ayah || '-'} / {detailItem.nama_ibu || '-'}</td>
@@ -383,12 +388,41 @@ const AdminPendaftaranPage = () => {
                   <tr>
                     <td style={{ padding: '8px 0', fontWeight: 'bold' }}>No. WhatsApp</td>
                     <td>:</td>
-                    <td><strong style={{ color: '#059669' }}>{detailItem.no_hp}</strong></td>
+                    <td>
+                      <a 
+                        href={`https://wa.me/${(detailItem.no_hp || '').replace(/^0/, '62').replace(/\D/g, '')}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#059669', fontWeight: 'bold' }}
+                      >
+                        <Phone size={14} /> {detailItem.no_hp}
+                      </a>
+                    </td>
                   </tr>
                   <tr>
                     <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Alamat Tinggal</td>
                     <td>:</td>
                     <td>{detailItem.alamat || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>RT / RW</td>
+                    <td>:</td>
+                    <td>RT {detailItem.rt || '-'} / RW {detailItem.rw || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Desa / Kelurahan</td>
+                    <td>:</td>
+                    <td>{detailItem.desa || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Kecamatan</td>
+                    <td>:</td>
+                    <td>{detailItem.kecamatan || '-'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Kabupaten / Kota</td>
+                    <td>:</td>
+                    <td>{detailItem.kabupaten || '-'}</td>
                   </tr>
                   <tr>
                     <td style={{ padding: '8px 0', fontWeight: 'bold' }}>Rekomendasi Kelas</td>

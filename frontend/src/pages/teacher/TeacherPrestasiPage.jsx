@@ -3,13 +3,16 @@ import {
   Award, CheckCircle2, Calendar, BookOpen, User, 
   Plus, Loader2, Sparkles, AlertCircle, RefreshCw, Trash2, ArrowRight
 } from 'lucide-react';
-import { prestasiAPI, kelasAPI } from '../../services/api';
+import { prestasiAPI, kelasAPI, pengaturanAPI } from '../../services/api';
 
 const TeacherPrestasiPage = () => {
   const [kelasList, setKelasList] = useState([]);
   const [selectedKelas, setSelectedKelas] = useState('');
   const [santriList, setSantriList] = useState([]);
   const [todayRecords, setTodayRecords] = useState([]);
+  const [kategoriList, setKategoriList] = useState([
+    'Qiraati', 'Tahfidz', 'Doa Harian', 'Hadits', 'Praktik Ibadah', 'Adab & Akhlak'
+  ]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -30,7 +33,21 @@ const TeacherPrestasiPage = () => {
   useEffect(() => {
     loadClasses();
     loadTodayPrestasi();
+    loadKategori();
   }, []);
+
+  const loadKategori = async () => {
+    try {
+      const settings = await pengaturanAPI.get();
+      if (settings?.kategori_prestasi) {
+        const parsed = JSON.parse(settings.kategori_prestasi);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setKategoriList(parsed);
+          setForm(prev => ({ ...prev, kategori: parsed[0] }));
+        }
+      }
+    } catch (_) {}
+  };
 
   useEffect(() => {
     if (selectedKelas) {
@@ -266,7 +283,7 @@ const TeacherPrestasiPage = () => {
               Bidang / Kategori
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-              {['Qiraati', 'Tahfidz', 'Doa Harian', 'Hadits', 'Praktik Ibadah', 'Adab & Akhlak'].map(cat => (
+              {kategoriList.map(cat => (
                 <button
                   key={cat}
                   type="button"

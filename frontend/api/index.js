@@ -1444,7 +1444,14 @@ app.post('/api/pendaftaran/:id/approve', async (req, res) => {
       jenis_kelamin: reg.jenis_kelamin || 'L',
       tempat_lahir: reg.tempat_lahir || null,
       tanggal_lahir: reg.tanggal_lahir || null,
+      hobi: reg.hobi || null,
+      cita_cita: reg.cita_cita || null,
       alamat: reg.alamat || null,
+      rt: reg.rt || null,
+      rw: reg.rw || null,
+      desa: reg.desa || null,
+      kecamatan: reg.kecamatan || null,
+      kabupaten: reg.kabupaten || null,
       nama_ayah: reg.nama_ayah || null,
       nama_ibu: reg.nama_ibu || null,
       no_hp_wali: reg.no_hp || null,
@@ -1461,7 +1468,7 @@ app.post('/api/pendaftaran/:id/approve', async (req, res) => {
     await supabase.from('pendaftaran_santri').update({
       status: 'diterima',
       santri_id: createdSantri.id,
-      updated_at: new Date()
+      updated_at: new Date().toISOString()
     }).eq('id', id);
 
     ok(res, { santri: createdSantri }, 'Santri baru berhasil diterima dan dimasukkan ke data santri aktif');
@@ -1588,7 +1595,7 @@ app.get('/api/prestasi/rapot/:santri_id', async (req, res) => {
 // ==================== TRANSAKSI KEUANGAN (KAS MASUK & KELUAR) ====================
 app.get('/api/transaksi-keuangan', async (req, res) => {
   try {
-    const { tipe, kategori, dari, sampai, bulan, tahun, search } = req.query;
+    const { tipe, kategori, dari, sampai, bulan, tahun, search, include_syahriah } = req.query;
     let q = supabase.from('transaksi_keuangan').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
 
     if (tipe && tipe !== 'semua') q = q.eq('tipe', tipe);
@@ -1611,6 +1618,58 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
       });
     }
 
+    // Synchronize Syahriah payments if include_syahriah is not 'false' and tipe !== 'pengeluaran'
+    const shouldIncludeSyahriah = include_syahriah !== 'false' && tipe !== 'pengeluaran';
+    let syahriahItems = [];
+
+    if (shouldIncludeSyahriah) {
+      let qPay = supabase.from('pembayaran')
+        .select('*, santri:santri_id(nama_lengkap), jenis:jenis_pembayaran_id(nama)')
+        .eq('status', 'lunas');
+
+      if (dari) qPay = qPay.gte('tanggal_bayar', dari);
+      if (sampai) qPay = qPay.lte('tanggal_bayar', sampai);
+      if (!dari && !sampai) {
+        if (bulan) qPay = qPay.eq('bulan', parseInt(bulan, 10));
+        if (tahun) qPay = qPay.eq('tahun', parseInt(tahun, 10));
+      }
+
+      const { data: payData, error: payErr } = await qPay;
+      if (!payErr && payData) {
+        syahriahItems = payData.map(p => {
+          const jenisNama = p.jenis?.nama || 'Syahriah';
+          const tgl = p.tanggal_bayar || (p.created_at ? p.created_at.split('T')[0] : `${p.tahun}-${String(p.bulan).padStart(2, '0')}-01`);
+          return {
+            id: `syahriah-${p.id}`,
+            pembayaran_id: p.id,
+            tanggal: tgl,
+            tipe: 'pemasukan',
+            kategori: jenisNama,
+            nominal: Number(p.nominal) || 0,
+            keterangan: `Pembayaran ${jenisNama} Bulan ${p.bulan}/${p.tahun} - ${p.santri?.nama_lengkap || 'Santri'}`,
+            penanggung_jawab: 'Bendahara / Kasir',
+            metode: p.metode_bayar || 'tunai',
+            is_syahriah: true,
+            created_at: p.created_at
+          };
+        });
+
+        // Filter syahriahItems by category if specified
+        if (kategori && kategori !== 'semua') {
+          syahriahItems = syahriahItems.filter(s => 
+            s.kategori.toLowerCase().includes(kategori.toLowerCase()) || 
+            kategori.toLowerCase().includes(s.kategori.toLowerCase())
+          );
+        }
+
+        // Merge syahriahItems into items
+        items = [...items, ...syahriahItems];
+
+        // Sort merged items by tanggal descending
+        items.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
+      }
+    }
+
     if (search) {
       const s = search.toLowerCase();
       items = items.filter(item => 
@@ -1622,12 +1681,14 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
 
     const totalPemasukan = items.filter(i => i.tipe === 'pemasukan').reduce((sum, i) => sum + Number(i.nominal), 0);
     const totalPengeluaran = items.filter(i => i.tipe === 'pengeluaran').reduce((sum, i) => sum + Number(i.nominal), 0);
+    const totalSyahriah = items.filter(i => i.is_syahriah).reduce((sum, i) => sum + Number(i.nominal), 0);
     const saldoKas = totalPemasukan - totalPengeluaran;
 
     ok(res, {
       items,
       totalPemasukan,
       totalPengeluaran,
+      totalSyahriah,
       saldoKas,
       totalTransaksi: items.length
     });
