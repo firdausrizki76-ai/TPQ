@@ -16,12 +16,21 @@ const LaporanKeuanganPage = () => {
     totalPengeluaran: 0,
     totalSyahriah: 0,
     saldoKas: 0,
-    totalTransaksi: 0
+    totalTransaksi: 0,
+    saldoReal: 0,
+    rekapKeseluruhan: {
+      totalPemasukan: 0,
+      totalPengeluaran: 0,
+      totalSyahriah: 0,
+      kasMasukManual: 0,
+      saldoReal: 0,
+      totalTransaksi: 0
+    }
   });
   const [loading, setLoading] = useState(true);
 
   // Filters
-  const [filterMode, setFilterMode] = useState('bulanan'); // 'bulanan' | 'harian'
+  const [filterMode, setFilterMode] = useState('bulanan'); // 'bulanan' | 'harian' | 'semua'
   const [filterBulan, setFilterBulan] = useState(new Date().getMonth() + 1);
   const [filterTahun, setFilterTahun] = useState(new Date().getFullYear());
   const [filterDari, setFilterDari] = useState('');
@@ -187,11 +196,12 @@ const LaporanKeuanganPage = () => {
       const params = {};
       if (filterTipe !== 'semua') params.tipe = filterTipe;
       params.include_syahriah = includeSyahriah ? 'true' : 'false';
+      params.mode = filterMode;
       
       if (filterMode === 'harian') {
         if (filterDari) params.dari = filterDari;
         if (filterSampai) params.sampai = filterSampai;
-      } else {
+      } else if (filterMode === 'bulanan') {
         if (filterBulan) params.bulan = filterBulan;
         if (filterTahun) params.tahun = filterTahun;
       }
@@ -203,7 +213,16 @@ const LaporanKeuanganPage = () => {
         totalPengeluaran: res?.totalPengeluaran || 0,
         totalSyahriah: res?.totalSyahriah || 0,
         saldoKas: res?.saldoKas || 0,
-        totalTransaksi: res?.totalTransaksi || 0
+        totalTransaksi: res?.totalTransaksi || 0,
+        saldoReal: res?.saldoReal !== undefined ? res.saldoReal : (res?.rekapKeseluruhan?.saldoReal || 0),
+        rekapKeseluruhan: res?.rekapKeseluruhan || {
+          totalPemasukan: 0,
+          totalPengeluaran: 0,
+          totalSyahriah: 0,
+          kasMasukManual: 0,
+          saldoReal: 0,
+          totalTransaksi: 0
+        }
       });
     } catch (e) {
       console.error(e);
@@ -274,6 +293,27 @@ const LaporanKeuanganPage = () => {
   };
 
   const handleExportExcel = () => {
+    const periodeText = filterMode === 'bulanan'
+      ? `${monthNames[filterBulan - 1]} ${filterTahun}`
+      : filterMode === 'harian'
+        ? `${filterDari || 'Awal'} s/d ${filterSampai || 'Akhir'}`
+        : 'Semua Waktu (Keseluruhan)';
+
+    const meta = [
+      { 'No': 'LAPORAN BUKU KAS & KEUANGAN TPQ ANFAK AL AZIZIAH' },
+      { 'No': `Periode Laporan: ${periodeText}` },
+      { 'No': `Waktu Unduh: ${new Date().toLocaleDateString('id-ID')}` },
+      { 'No': '--- REKAPITULASI KAS KESELURUHAN (SALDO REAL SAAT INI) ---' },
+      { 'No': 'Saldo Kas Riil Saat Ini', 'Tanggal': formatRp(summary.rekapKeseluruhan?.saldoReal ?? summary.saldoReal) },
+      { 'No': 'Total Pemasukan Akumulatif', 'Tanggal': formatRp(summary.rekapKeseluruhan?.totalPemasukan) },
+      { 'No': 'Total Pengeluaran Akumulatif', 'Tanggal': formatRp(summary.rekapKeseluruhan?.totalPengeluaran) },
+      { 'No': '--- MUTASI ARUS KAS PERIODE INI ---' },
+      { 'No': 'Pemasukan Periode Ini', 'Tanggal': formatRp(summary.totalPemasukan) },
+      { 'No': 'Pengeluaran Periode Ini', 'Tanggal': formatRp(summary.totalPengeluaran) },
+      { 'No': 'Surplus / Defisit Periode Ini', 'Tanggal': formatRp(summary.saldoKas) },
+      { 'No': '' }
+    ];
+
     const formatted = filteredData.map((d, idx) => ({
       'No': idx + 1,
       'Tanggal': d.tanggal,
@@ -286,7 +326,7 @@ const LaporanKeuanganPage = () => {
       'Penanggung Jawab': d.penanggung_jawab || '-'
     }));
 
-    const ws = XLSX.utils.json_to_sheet(formatted);
+    const ws = XLSX.utils.json_to_sheet([...meta, ...formatted]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Laporan Kas TPQ');
     XLSX.writeFile(wb, `Laporan_Kas_TPQ_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -321,24 +361,58 @@ const LaporanKeuanganPage = () => {
           <h1 style={{ fontSize: '22px', margin: 0, color: '#064e3b' }}>TPQ ANFAK AL AZIZAH</h1>
           <h2 style={{ fontSize: '16px', margin: '4px 0', textDecoration: 'underline' }}>LAPORAN BUKU KAS & ARUS KEUANGAN</h2>
           <p style={{ fontSize: '13px', margin: 0, color: '#64748b' }}>
-            Periode: {filterMode === 'bulanan' ? `${monthNames[filterBulan - 1]} ${filterTahun}` : `${filterDari || 'Awal'} s/d ${filterSampai || 'Akhir'}`}
+            Periode: {filterMode === 'bulanan' ? `${monthNames[filterBulan - 1]} ${filterTahun}` : filterMode === 'harian' ? `${filterDari || 'Awal'} s/d ${filterSampai || 'Akhir'}` : 'Semua Waktu (Keseluruhan)'}
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px', textAlign: 'center', fontSize: '14px' }}>
-          <div style={{ border: '1px solid #16a34a', padding: '10px', backgroundColor: '#f0fdf4' }}>
-            <span style={{ fontSize: '12px', color: '#16a34a', fontWeight: 'bold' }}>TOTAL PEMASUKAN</span>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#15803d' }}>{formatRp(summary.totalPemasukan)}</div>
+        {/* REKAPITULASI KESELURUHAN (SALDO REAL KAS TPQ) */}
+        <div style={{ border: '2px solid #064e3b', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', backgroundColor: '#f0fdf4' }}>
+          <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#064e3b', textTransform: 'uppercase', marginBottom: '8px', textAlign: 'center', borderBottom: '1px solid #bbf7d0', paddingBottom: '4px' }}>
+            REKAPITULASI KAS KESELURUHAN (SALDO REAL KAS TPQ)
           </div>
-          <div style={{ border: '1px solid #dc2626', padding: '10px', backgroundColor: '#fef2f2' }}>
-            <span style={{ fontSize: '12px', color: '#dc2626', fontWeight: 'bold' }}>TOTAL PENGELUARAN</span>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#b91c1c' }}>{formatRp(summary.totalPengeluaran)}</div>
-          </div>
-          <div style={{ border: '1px solid #d97706', padding: '10px', backgroundColor: '#fffbeb' }}>
-            <span style={{ fontSize: '12px', color: '#d97706', fontWeight: 'bold' }}>SISA SALDO KAS</span>
-            <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#b45309' }}>{formatRp(summary.saldoKas)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', textAlign: 'center' }}>
+            <div>
+              <span style={{ fontSize: '11px', color: '#166534', fontWeight: 'bold' }}>TOTAL PEMASUKAN AKUMULATIF</span>
+              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#15803d' }}>
+                {formatRp(summary.rekapKeseluruhan?.totalPemasukan)}
+              </div>
+            </div>
+            <div>
+              <span style={{ fontSize: '11px', color: '#991b1b', fontWeight: 'bold' }}>TOTAL PENGELUARAN AKUMULATIF</span>
+              <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#b91c1c' }}>
+                {formatRp(summary.rekapKeseluruhan?.totalPengeluaran)}
+              </div>
+            </div>
+            <div>
+              <span style={{ fontSize: '11px', color: '#064e3b', fontWeight: 'bold' }}>⭐ SALDO REAL KAS SAAT INI</span>
+              <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#047857' }}>
+                {formatRp(summary.rekapKeseluruhan?.saldoReal ?? summary.saldoReal)}
+              </div>
+            </div>
           </div>
         </div>
+
+        {filterMode !== 'semua' && (
+          <div style={{ border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px', backgroundColor: '#f8fafc' }}>
+            <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', textTransform: 'uppercase', marginBottom: '6px', textAlign: 'center' }}>
+              MUTASI ARUS KAS PERIODE INI ({filterMode === 'bulanan' ? `${monthNames[filterBulan - 1]} ${filterTahun}` : `${filterDari || 'Awal'} s/d ${filterSampai || 'Akhir'}`})
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center', fontSize: '13px' }}>
+              <div>
+                <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 'bold' }}>PEMASUKAN PERIODE</span>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#15803d' }}>{formatRp(summary.totalPemasukan)}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 'bold' }}>PENGELUARAN PERIODE</span>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#b91c1c' }}>{formatRp(summary.totalPengeluaran)}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '10px', color: '#b45309', fontWeight: 'bold' }}>SURPLUS / DEFISIT PERIODE</span>
+                <div style={{ fontSize: '14px', fontWeight: 'bold', color: summary.saldoKas >= 0 ? '#15803d' : '#b91c1c' }}>{formatRp(summary.saldoKas)}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
           <thead>
@@ -413,47 +487,194 @@ const LaporanKeuanganPage = () => {
         </div>
       </div>
 
-      {/* Stats Summary Cards */}
-      <div className="grid-4-cols mb-6 no-print">
-        <div className="card stat-card" style={{ padding: '20px' }}>
-          <div className="stat-title">Total Pemasukan</div>
-          <div className="stat-value" style={{ color: '#16a34a' }}>
-            {formatRp(summary.totalPemasukan)}
+      {/* REKAPITULASI KAS KESELURUHAN (SALDO REAL KAS TPQ) */}
+      <div 
+        className="card mb-6 no-print" 
+        style={{ 
+          background: 'linear-gradient(135deg, #064e3b 0%, #065f46 55%, #047857 100%)', 
+          color: 'white', 
+          padding: '24px', 
+          borderRadius: '16px', 
+          boxShadow: '0 10px 25px -5px rgba(6, 78, 59, 0.3)',
+          border: 'none',
+          position: 'relative'
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.2)', paddingBottom: '16px', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: '10px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Wallet size={26} color="#fef08a" />
+            </div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', letterSpacing: '-0.3px', color: '#ffffff' }}>
+                  Rekapitulasi Keuangan Keseluruhan
+                </h2>
+                <span style={{ 
+                  backgroundColor: '#fef08a', 
+                  color: '#854d0e', 
+                  fontSize: '11px', 
+                  fontWeight: 'bold', 
+                  padding: '2px 8px', 
+                  borderRadius: '12px' 
+                }}>
+                  Semua Waktu
+                </span>
+              </div>
+              <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'rgba(255,255,255,0.85)' }}>
+                Akumulasi seluruh arus kas fisik & bank TPQ Anfak Al Aziziah sejak awal pencatatan
+              </p>
+            </div>
           </div>
-          <div className="stat-subtext">
-            Kas Masuk Periode Ini
-            {summary.totalSyahriah > 0 && (
-              <span style={{ display: 'block', color: '#15803d', fontWeight: 'bold', fontSize: '11px', marginTop: '2px' }}>
-                (Syahriah: {formatRp(summary.totalSyahriah)})
-              </span>
-            )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ 
+              backgroundColor: 'rgba(255,255,255,0.18)', 
+              backdropFilter: 'blur(4px)', 
+              padding: '6px 14px', 
+              borderRadius: '20px', 
+              fontSize: '12px', 
+              fontWeight: 'bold',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              border: '1px solid rgba(255,255,255,0.25)'
+            }}>
+              <CheckCircle2 size={14} color="#86efac" /> Saldo Real Kas Aktif
+            </span>
           </div>
         </div>
 
-        <div className="card stat-card" style={{ padding: '20px' }}>
-          <div className="stat-title">Total Pengeluaran</div>
-          <div className="stat-value" style={{ color: '#dc2626' }}>
-            {formatRp(summary.totalPengeluaran)}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+          {/* Saldo Real Card */}
+          <div style={{ 
+            backgroundColor: 'rgba(255,255,255,0.14)', 
+            backdropFilter: 'blur(8px)',
+            padding: '16px 20px', 
+            borderRadius: '12px', 
+            border: '2px solid rgba(254, 240, 138, 0.6)' 
+          }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#fef08a', fontWeight: 'bold', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <DollarSign size={15} /> ⭐ SALDO KAS RIIL (SAAT INI)
+            </div>
+            <div style={{ fontSize: '26px', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.5px' }}>
+              {formatRp(summary.rekapKeseluruhan?.saldoReal ?? summary.saldoReal)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', marginTop: '4px' }}>
+              Sisa kas bersih nyata yang dimiliki TPQ
+            </div>
           </div>
-          <div className="stat-subtext">Kas Keluar Periode Ini</div>
-        </div>
 
-        <div className="card stat-card" style={{ padding: '20px', backgroundColor: summary.saldoKas >= 0 ? '#f0fdf4' : '#fef2f2', border: summary.saldoKas >= 0 ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>
-          <div className="stat-title">Sisa Saldo Kas</div>
-          <div className="stat-value" style={{ color: summary.saldoKas >= 0 ? '#15803d' : '#b91c1c' }}>
-            {formatRp(summary.saldoKas)}
+          {/* Total Pemasukan Keseluruhan */}
+          <div style={{ 
+            backgroundColor: 'rgba(255,255,255,0.08)', 
+            padding: '16px 20px', 
+            borderRadius: '12px', 
+            border: '1px solid rgba(255,255,255,0.15)' 
+          }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#86efac', fontWeight: 'bold', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowUpRight size={15} /> Total Semua Pemasukan
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ffffff' }}>
+              {formatRp(summary.rekapKeseluruhan?.totalPemasukan)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', marginTop: '4px' }}>
+              Kas Masuk: {formatRp(summary.rekapKeseluruhan?.kasMasukManual)} + Syahriah: {formatRp(summary.rekapKeseluruhan?.totalSyahriah)}
+            </div>
           </div>
-          <div className="stat-subtext">Saldo Kas Bersih</div>
-        </div>
 
-        <div className="card stat-card" style={{ padding: '20px' }}>
-          <div className="stat-title">Volume Transaksi</div>
-          <div className="stat-value" style={{ color: 'var(--color-primary-container)' }}>
-            {summary.totalTransaksi}
+          {/* Total Pengeluaran Keseluruhan */}
+          <div style={{ 
+            backgroundColor: 'rgba(255,255,255,0.08)', 
+            padding: '16px 20px', 
+            borderRadius: '12px', 
+            border: '1px solid rgba(255,255,255,0.15)' 
+          }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#fca5a5', fontWeight: 'bold', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <ArrowDownRight size={15} /> Total Semua Pengeluaran
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ffffff' }}>
+              {formatRp(summary.rekapKeseluruhan?.totalPengeluaran)}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', marginTop: '4px' }}>
+              Seluruh biaya operasional yang dikeluarkan
+            </div>
           </div>
-          <div className="stat-subtext">Transaksi Tercatat</div>
+
+          {/* Total Transaksi Keseluruhan */}
+          <div style={{ 
+            backgroundColor: 'rgba(255,255,255,0.08)', 
+            padding: '16px 20px', 
+            borderRadius: '12px', 
+            border: '1px solid rgba(255,255,255,0.15)' 
+          }}>
+            <div style={{ fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', color: '#e2e8f0', fontWeight: 'bold', marginBottom: '6px' }}>
+              Total Transaksi Riil
+            </div>
+            <div style={{ fontSize: '22px', fontWeight: 'bold', color: '#ffffff' }}>
+              {summary.rekapKeseluruhan?.totalTransaksi || summary.totalTransaksi} <span style={{ fontSize: '13px', fontWeight: 'normal' }}>transaksi</span>
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.85)', marginTop: '4px' }}>
+              Histori pemasukan kas & pembayaran lunas
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Mutasi Periode Terpilih (Jika Memfilter Bulanan atau Harian) */}
+      {filterMode !== 'semua' && (
+        <div className="mb-6 no-print">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--color-primary-container)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={18} /> Mutasi Arus Kas Periode Ini: <span style={{ color: 'var(--color-gold)', textDecoration: 'underline' }}>{filterMode === 'bulanan' ? `${monthNames[filterBulan - 1]} ${filterTahun}` : `${filterDari || 'Awal'} s/d ${filterSampai || 'Akhir'}`}</span>
+            </h3>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>
+              {summary.totalTransaksi} transaksi pada periode ini
+            </span>
+          </div>
+
+          <div className="grid-4-cols">
+            <div className="card stat-card" style={{ padding: '18px' }}>
+              <div className="stat-title">Pemasukan Periode Ini</div>
+              <div className="stat-value" style={{ color: '#16a34a' }}>
+                {formatRp(summary.totalPemasukan)}
+              </div>
+              <div className="stat-subtext">
+                Kas Masuk Periode Ini
+                {summary.totalSyahriah > 0 && (
+                  <span style={{ display: 'block', color: '#15803d', fontWeight: 'bold', fontSize: '11px', marginTop: '2px' }}>
+                    (Syahriah: {formatRp(summary.totalSyahriah)})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="card stat-card" style={{ padding: '18px' }}>
+              <div className="stat-title">Pengeluaran Periode Ini</div>
+              <div className="stat-value" style={{ color: '#dc2626' }}>
+                {formatRp(summary.totalPengeluaran)}
+              </div>
+              <div className="stat-subtext">Biaya Operasional Periode Ini</div>
+            </div>
+
+            <div className="card stat-card" style={{ padding: '18px', backgroundColor: summary.saldoKas >= 0 ? '#f0fdf4' : '#fef2f2', border: summary.saldoKas >= 0 ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>
+              <div className="stat-title">Surplus / Defisit Periode Ini</div>
+              <div className="stat-value" style={{ color: summary.saldoKas >= 0 ? '#15803d' : '#b91c1c' }}>
+                {formatRp(summary.saldoKas)}
+              </div>
+              <div className="stat-subtext">Selisih Masuk - Keluar Periode Ini</div>
+            </div>
+
+            <div className="card stat-card" style={{ padding: '18px' }}>
+              <div className="stat-title">Volume Periode Ini</div>
+              <div className="stat-value" style={{ color: 'var(--color-primary-container)' }}>
+                {summary.totalTransaksi}
+              </div>
+              <div className="stat-subtext">Transaksi Periode Ini</div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="card w-full no-print">
@@ -462,7 +683,7 @@ const LaporanKeuanganPage = () => {
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div className="flex items-center gap-3 flex-1 flex-wrap">
             
-            {/* Toggle Bulanan vs Harian */}
+            {/* Toggle Bulanan vs Harian vs Semua Waktu */}
             <div style={{ display: 'flex', gap: '4px', backgroundColor: '#f1f5f9', padding: '4px', borderRadius: '12px' }}>
               <button
                 type="button"
@@ -498,9 +719,26 @@ const LaporanKeuanganPage = () => {
               >
                 Harian (Rentang)
               </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('semua')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  backgroundColor: filterMode === 'semua' ? 'white' : 'transparent',
+                  color: filterMode === 'semua' ? 'var(--color-primary-container)' : '#64748b',
+                  boxShadow: filterMode === 'semua' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none'
+                }}
+              >
+                Semua Waktu
+              </button>
             </div>
 
-            {filterMode === 'bulanan' ? (
+            {filterMode === 'bulanan' && (
               <>
                 <div className="input-with-icon" style={{ minWidth: '150px' }}>
                   <Calendar className="icon" size={18} />
@@ -528,7 +766,9 @@ const LaporanKeuanganPage = () => {
                   </select>
                 </div>
               </>
-            ) : (
+            )}
+
+            {filterMode === 'harian' && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <input 
                   type="date" 
@@ -543,6 +783,12 @@ const LaporanKeuanganPage = () => {
                   value={filterSampai} 
                   onChange={(e) => setFilterSampai(e.target.value)} 
                 />
+              </div>
+            )}
+
+            {filterMode === 'semua' && (
+              <div style={{ fontSize: '12px', color: '#047857', fontWeight: 'bold', backgroundColor: '#ecfdf5', padding: '8px 14px', borderRadius: '10px', border: '1px solid #a7f3d0' }}>
+                Menampilkan Seluruh Riwayat Kas (Semua Waktu)
               </div>
             )}
 

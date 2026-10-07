@@ -1595,21 +1595,23 @@ app.get('/api/prestasi/rapot/:santri_id', async (req, res) => {
 // ==================== TRANSAKSI KEUANGAN (KAS MASUK & KELUAR) ====================
 app.get('/api/transaksi-keuangan', async (req, res) => {
   try {
-    const { tipe, kategori, dari, sampai, bulan, tahun, search, include_syahriah } = req.query;
+    const { tipe, kategori, dari, sampai, bulan, tahun, search, include_syahriah, mode } = req.query;
     let q = supabase.from('transaksi_keuangan').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
 
     if (tipe && tipe !== 'semua') q = q.eq('tipe', tipe);
     if (kategori && kategori !== 'semua') q = q.eq('kategori', kategori);
-    if (dari) q = q.gte('tanggal', dari);
-    if (sampai) q = q.lte('tanggal', sampai);
+    if (mode !== 'semua') {
+      if (dari) q = q.gte('tanggal', dari);
+      if (sampai) q = q.lte('tanggal', sampai);
+    }
 
     const { data, error } = await q;
     if (error) throw error;
 
     let items = data || [];
 
-    // Filter by month/year if no specific date range is set
-    if (!dari && !sampai && (bulan || tahun)) {
+    // Filter by month/year if no specific date range is set and mode !== 'semua'
+    if (mode !== 'semua' && !dari && !sampai && (bulan || tahun)) {
       items = items.filter(item => {
         const d = new Date(item.tanggal);
         const matchYear = tahun ? d.getFullYear() === parseInt(tahun, 10) : true;
@@ -1627,11 +1629,13 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
         .select('*, santri:santri_id(nama_lengkap), jenis:jenis_pembayaran_id(nama)')
         .eq('status', 'lunas');
 
-      if (dari) qPay = qPay.gte('tanggal_bayar', dari);
-      if (sampai) qPay = qPay.lte('tanggal_bayar', sampai);
-      if (!dari && !sampai) {
-        if (bulan) qPay = qPay.eq('bulan', parseInt(bulan, 10));
-        if (tahun) qPay = qPay.eq('tahun', parseInt(tahun, 10));
+      if (mode !== 'semua') {
+        if (dari) qPay = qPay.gte('tanggal_bayar', dari);
+        if (sampai) qPay = qPay.lte('tanggal_bayar', sampai);
+        if (!dari && !sampai) {
+          if (bulan) qPay = qPay.eq('bulan', parseInt(bulan, 10));
+          if (tahun) qPay = qPay.eq('tahun', parseInt(tahun, 10));
+        }
       }
 
       const { data: payData, error: payErr } = await qPay;
@@ -1685,18 +1689,56 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
       );
     }
 
+    // Hitung Ringkasan Periode Terpilih
     const totalPemasukan = items.filter(i => i.tipe === 'pemasukan').reduce((sum, i) => sum + Number(i.nominal), 0);
     const totalPengeluaran = items.filter(i => i.tipe === 'pengeluaran').reduce((sum, i) => sum + Number(i.nominal), 0);
     const totalSyahriah = items.filter(i => i.is_syahriah).reduce((sum, i) => sum + Number(i.nominal), 0);
     const saldoKas = totalPemasukan - totalPengeluaran;
 
+    // Hitung Rekapitulasi Keseluruhan (All-Time / Saldo Real Kas TPQ)
+    const [allTkRes, allPayRes] = await Promise.all([
+      supabase.from('transaksi_keuangan').select('tipe, nominal'),
+      supabase.from('pembayaran').select('nominal, jenis:jenis_pembayaran_id(nama)').eq('status', 'lunas')
+    ]);
+
+    const allTk = allTkRes.data || [];
+    const allTkMasuk = allTk.filter(t => t.tipe === 'pemasukan').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+    const allTkKeluar = allTk.filter(t => t.tipe === 'pengeluaran').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+
+    let allSyahriahNominal = 0;
+    let allSyahriahCount = 0;
+    if (allPayRes.data && allPayRes.data.length > 0) {
+      const allSyahriahList = allPayRes.data.filter(p => {
+        const jNama = (p.jenis?.nama || '').toLowerCase().trim();
+        return jNama.includes('syahriah') && !jNama.includes('tabungan');
+      });
+      allSyahriahNominal = allSyahriahList.reduce((sum, p) => sum + Number(p.nominal || 0), 0);
+      allSyahriahCount = allSyahriahList.length;
+    }
+
+    const allPemasukanTotal = allTkMasuk + (include_syahriah !== 'false' ? allSyahriahNominal : 0);
+    const allPengeluaranTotal = allTkKeluar;
+    const saldoReal = allPemasukanTotal - allPengeluaranTotal;
+
     ok(res, {
       items,
+      // Periode terpilih
       totalPemasukan,
       totalPengeluaran,
       totalSyahriah,
       saldoKas,
-      totalTransaksi: items.length
+      totalTransaksi: items.length,
+
+      // Rekap Keseluruhan (All-time / Saldo Real)
+      saldoReal,
+      rekapKeseluruhan: {
+        totalPemasukan: allPemasukanTotal,
+        totalPengeluaran: allPengeluaranTotal,
+        totalSyahriah: allSyahriahNominal,
+        kasMasukManual: allTkMasuk,
+        saldoReal: saldoReal,
+        totalTransaksi: allTk.length + (include_syahriah !== 'false' ? allSyahriahCount : 0)
+      }
     });
   } catch (e) { fail(res, e.message, 500); }
 });
