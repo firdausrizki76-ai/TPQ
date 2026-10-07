@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, Search, Filter, CheckCircle2, XCircle, Clock, 
   Eye, Trash2, Check, RefreshCw, Printer, AlertCircle, Phone, 
-  Calendar, BookOpen, MapPin, User, ArrowRight, Loader2, Download, X
+  Calendar, BookOpen, MapPin, User, ArrowRight, Loader2, Download, X,
+  MessageCircle, Copy, ExternalLink
 } from 'lucide-react';
 import { pendaftaranAPI, kelasAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
@@ -19,6 +20,12 @@ const AdminPendaftaranPage = () => {
   const [approveItem, setApproveItem] = useState(null);
   const [approveForm, setApproveForm] = useState({ nomor_induk: '', kelas_id: '' });
   const [processing, setProcessing] = useState(false);
+
+  // WhatsApp Modal State
+  const [waModalItem, setWaModalItem] = useState(null);
+  const [waPhone, setWaPhone] = useState('');
+  const [waMessage, setWaMessage] = useState('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -45,6 +52,69 @@ const AdminPendaftaranPage = () => {
     }
   };
 
+  const cleanPhone = (phone) => {
+    if (!phone) return '';
+    let cleaned = String(phone).replace(/\D/g, '');
+    if (cleaned.startsWith('0')) {
+      cleaned = '62' + cleaned.slice(1);
+    } else if (!cleaned.startsWith('62')) {
+      cleaned = '62' + cleaned;
+    }
+    return cleaned;
+  };
+
+  const generateWhatsAppMessage = (item) => {
+    const nama = item.nama_lengkap || '';
+    const jk = item.jenis_kelamin === 'P' ? 'Putri' : 'Putra';
+    const nis = item.santri?.nomor_induk || item.nomor_induk || '';
+    const username = item.santri?.nomor_induk || item.nomor_induk || (nis || '');
+    const password = item.santri?.password || (nis ? `siswa${nis.slice(-4)}` : '');
+
+    return `Assalamualaikum Warahmatullahi Wabarakatuh
+Kepada Yth.
+Orang Tua/Wali dari
+${nama}
+
+Selamat kepada Bapak/Ibu Wali Santri dari ${nama}.
+${jk} anda dinyatakan diterima sebagai santri baru di TPQ Anfak Al Aziziah dengan nomor induk ${nis}.
+Semoga ananda diberikan kelancaran, keberkahan, dan kemudahan dalam menuntut ilmu di TPQ Anfak Al Aziziah. Dan semoga mendapatkan ilmu yang bermanfaat serta menjadi anak yang sholeh/sholehah.
+Selanjutnya untuk informasi administrasi, tabungan santri bisa mengakses Link Web Aplikasi : https://tpq-anfak-alaziziah.vercel.app/login atau Link Apk Android : https://bit.ly/TPQ_AAA_Digital
+Dengan rincian akun sebagai berikut
+Username : ${username}
+Password : ${password} (Password bisa dirubah setelah login)
+
+Terima kasih atas kepercayaanya.
+Wassalamualaikum warahmatullahi wabarakatuh.
+Admin TPQ Anfak Al Aziziah`;
+  };
+
+  const handleOpenWhatsApp = (item) => {
+    setWaModalItem(item);
+    setWaPhone(item.no_hp || item.santri?.no_hp_wali || '');
+    setWaMessage(generateWhatsAppMessage(item));
+    setCopied(false);
+  };
+
+  const handleSendWhatsApp = () => {
+    const phone = cleanPhone(waPhone);
+    if (!phone) {
+      alert('Nomor WhatsApp tidak boleh kosong');
+      return;
+    }
+    const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(waMessage)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleCopyText = async () => {
+    try {
+      await navigator.clipboard.writeText(waMessage);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (err) {
+      alert('Gagal menyalin teks');
+    }
+  };
+
   const handleOpenApprove = (item) => {
     const yearPrefix = String(new Date().getFullYear()).slice(-2);
     const suggestedNis = `${yearPrefix}${String(Math.floor(1000 + Math.random() * 9000))}`;
@@ -65,10 +135,24 @@ const AdminPendaftaranPage = () => {
 
     setProcessing(true);
     try {
-      await pendaftaranAPI.approve(approveItem.id, approveForm);
-      alert(`Santri ${approveItem.nama_lengkap} berhasil diterima dan dimasukkan ke data santri aktif!`);
+      const res = await pendaftaranAPI.approve(approveItem.id, approveForm);
+      const createdSantri = res?.data?.santri || {
+        nomor_induk: approveForm.nomor_induk,
+        password: 'siswa' + approveForm.nomor_induk.slice(-4)
+      };
+      
+      const updatedApprovedItem = {
+        ...approveItem,
+        status: 'diterima',
+        santri: createdSantri,
+        nomor_induk: approveForm.nomor_induk
+      };
+
       setApproveItem(null);
-      loadData();
+      await loadData();
+
+      // Buka modal WhatsApp langsung untuk kemudahan konfirmasi
+      handleOpenWhatsApp(updatedApprovedItem);
     } catch (e) {
       alert('Gagal memproses persetujuan: ' + e.message);
     } finally {
@@ -292,13 +376,33 @@ const AdminPendaftaranPage = () => {
                       )}
                     </td>
                     <td className="text-center">
-                      <div className="flex justify-center gap-1">
+                      <div className="flex justify-center items-center gap-1 flex-wrap">
                         <button 
                           style={{ border: 'none', background: 'transparent', color: '#0284c7', cursor: 'pointer', padding: '6px' }}
                           onClick={() => setDetailItem(item)}
                           title="Lihat Detail"
                         >
                           <Eye size={18} />
+                        </button>
+
+                        <button 
+                          className="btn-primary" 
+                          style={{ 
+                            padding: '4px 8px', 
+                            fontSize: '11px', 
+                            backgroundColor: '#25D366', 
+                            color: '#ffffff',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            fontWeight: '600'
+                          }}
+                          onClick={() => handleOpenWhatsApp(item)}
+                          title="Kirim Pesan WhatsApp Penerimaan"
+                        >
+                          <MessageCircle size={14} /> WA
                         </button>
 
                         {item.status === 'menunggu' && (
@@ -447,6 +551,18 @@ const AdminPendaftaranPage = () => {
               >
                 Tutup
               </button>
+              <button 
+                type="button" 
+                className="btn-primary"
+                style={{ backgroundColor: '#25D366', color: '#ffffff', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                onClick={() => {
+                  const item = detailItem;
+                  setDetailItem(null);
+                  handleOpenWhatsApp(item);
+                }}
+              >
+                <MessageCircle size={16} /> Hubungi via WA
+              </button>
               {detailItem.status === 'menunggu' && (
                 <button 
                   type="button" 
@@ -532,6 +648,128 @@ const AdminPendaftaranPage = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* WHATSAPP MODAL */}
+      {waModalItem && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="modal-header" style={{ borderBottom: '2px solid #25D366' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ backgroundColor: '#dcfce7', padding: '8px', borderRadius: '50%', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageCircle size={22} />
+                </div>
+                <div>
+                  <h2 className="modal-title" style={{ margin: 0, fontSize: '18px' }}>Kirim Pengumuman ke WhatsApp</h2>
+                  <span style={{ fontSize: '12px', color: '#64748b' }}>
+                    Calon Santri: <strong>{waModalItem.nama_lengkap}</strong> &bull; No. Reg: {waModalItem.nomor_pendaftaran}
+                  </span>
+                </div>
+              </div>
+              <X className="modal-close" onClick={() => setWaModalItem(null)} />
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {waModalItem.status !== 'diterima' && (
+                <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '10px 14px', fontSize: '12px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertCircle size={16} />
+                  <span>
+                    <strong>Perhatian:</strong> Status pendaftaran saat ini masih <em>{waModalItem.status}</em>. Template di bawah disiapkan untuk pengumuman penerimaan santri baru.
+                  </span>
+                </div>
+              )}
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label" style={{ fontWeight: 'bold', fontSize: '13px' }}>
+                  Nomor WhatsApp Orang Tua / Wali <span style={{ color: 'red' }}>*</span>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    value={waPhone} 
+                    onChange={(e) => setWaPhone(e.target.value)} 
+                    placeholder="Contoh: 085743333291"
+                    style={{ fontWeight: 'bold', fontSize: '15px', color: '#166534', flex: 1 }}
+                  />
+                  <div style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'nowrap', backgroundColor: '#f1f5f9', padding: '8px 12px', borderRadius: '8px' }}>
+                    Target: <strong>+{cleanPhone(waPhone) || '-'}</strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ margin: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" style={{ fontWeight: 'bold', fontSize: '13px', margin: 0 }}>
+                    Isi Pesan Konfirmasi Penerimaan (Dapat diedit bebas):
+                  </label>
+                  <button 
+                    type="button" 
+                    onClick={handleCopyText}
+                    style={{ 
+                      border: '1px solid #cbd5e1', 
+                      background: copied ? '#dcfce7' : '#ffffff', 
+                      color: copied ? '#166534' : '#475569', 
+                      borderRadius: '6px', 
+                      padding: '4px 10px', 
+                      fontSize: '11px', 
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    {copied ? <Check size={13} /> : <Copy size={13} />}
+                    {copied ? 'Tersalin ke Clipboard!' : 'Salin Pesan'}
+                  </button>
+                </div>
+                <textarea 
+                  className="input-field" 
+                  rows={14} 
+                  value={waMessage} 
+                  onChange={(e) => setWaMessage(e.target.value)}
+                  style={{ 
+                    fontFamily: 'inherit', 
+                    fontSize: '13px', 
+                    lineHeight: '1.6', 
+                    backgroundColor: '#f8fafc',
+                    resize: 'vertical',
+                    padding: '12px'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button 
+                type="button" 
+                className="btn-primary" 
+                style={{ backgroundColor: '#f1f5f9', color: '#64748b' }}
+                onClick={() => setWaModalItem(null)}
+              >
+                Tutup
+              </button>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  onClick={handleCopyText}
+                  className="btn-primary"
+                  style={{ backgroundColor: '#e2e8f0', color: '#334155' }}
+                >
+                  <Copy size={16} /> {copied ? 'Tersalin' : 'Salin Teks'}
+                </button>
+                <button 
+                  type="button" 
+                  onClick={handleSendWhatsApp}
+                  className="btn-primary"
+                  style={{ backgroundColor: '#25D366', color: '#ffffff', fontWeight: 'bold' }}
+                >
+                  <ExternalLink size={16} /> Buka WhatsApp & Kirim
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -438,7 +438,7 @@ const PrestasiAdminPage = () => {
                           {santri.jenis_kelamin || 'L'}
                         </span>
                       </td>
-                      <td>{santri.nama_ayah || santri.nama_ibu || santri.nama_wali || '-'}</td>
+                      <td>{santri.nama_wali || santri.nama_ayah || santri.nama_ibu || '-'}</td>
                       <td>
                         <span className="badge badge-success">
                           {santri.status || 'aktif'}
@@ -677,6 +677,14 @@ const PrestasiAdminPage = () => {
                       <td>:</td>
                       <td>{rapotData.santri.wali?.nama_lengkap || 'Ustadz / Ustadzah'}</td>
                     </tr>
+                    <tr>
+                      <td style={{ padding: '6px 0', fontWeight: 'bold' }}>Orang Tua / Wali</td>
+                      <td>:</td>
+                      <td style={{ fontWeight: 'bold' }}>{rapotData.santri.nama_wali || rapotData.santri.nama_ayah || rapotData.santri.nama_ibu || '-'}</td>
+                      <td style={{ padding: '6px 0', fontWeight: 'bold' }}>No. HP / WA Wali</td>
+                      <td>:</td>
+                      <td>{rapotData.santri.no_hp_wali || rapotData.santri.no_hp_ayah || rapotData.santri.no_hp_ibu || '-'}</td>
+                    </tr>
                   </tbody>
                 </table>
 
@@ -752,7 +760,9 @@ const PrestasiAdminPage = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', fontSize: '13px', marginTop: '40px' }}>
                   <div>
                     <p style={{ margin: '0 0 70px 0' }}>Mengetahui,<br />Orang Tua / Wali Santri</p>
-                    <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>( .................................... )</p>
+                    <p style={{ fontWeight: 'bold', textDecoration: 'underline' }}>
+                      ( {rapotData.santri.nama_wali || rapotData.santri.nama_ayah || rapotData.santri.nama_ibu || '....................................'} )
+                    </p>
                   </div>
                   <div>
                     <p style={{ margin: '0 0 70px 0' }}>Wali Kelas / Guru Pembimbing,</p>

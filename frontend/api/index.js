@@ -443,7 +443,7 @@ app.get('/api/kelas/:id/santri', async (req, res) => {
   try {
     const { status } = req.query;
     let q = supabase.from('santri')
-      .select('id, nomor_induk, nama_lengkap, status, tanggal_keluar')
+      .select('*')
       .eq('kelas_id', req.params.id);
     if (status === 'keluar') {
       q = q.in('status', ['pindah', 'nonaktif', 'lulus']);
@@ -1386,7 +1386,7 @@ app.get('/api/pendaftaran', async (req, res) => {
   try {
     const { status, search } = req.query;
     let q = supabase.from('pendaftaran_santri')
-      .select('*, kelas:kelas_id(nama_kelas, kode_kelas), santri:santri_id(nama_lengkap, nomor_induk)')
+      .select('*, kelas:kelas_id(nama_kelas, kode_kelas), santri:santri_id(nama_lengkap, nomor_induk, password, no_hp_wali)')
       .order('created_at', { ascending: false });
 
     if (status && status !== 'semua') {
@@ -1636,7 +1636,13 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
 
       const { data: payData, error: payErr } = await qPay;
       if (!payErr && payData) {
-        syahriahItems = payData.map(p => {
+        // Hanya sinkronkan pembayaran Syahriah (eksklusif, tidak termasuk Tabungan Wajib / infaq)
+        const onlySyahriah = payData.filter(p => {
+          const jenisNama = (p.jenis?.nama || '').toLowerCase().trim();
+          return jenisNama.includes('syahriah') && !jenisNama.includes('tabungan');
+        });
+
+        syahriahItems = onlySyahriah.map(p => {
           const jenisNama = p.jenis?.nama || 'Syahriah';
           const tgl = p.tanggal_bayar || (p.created_at ? p.created_at.split('T')[0] : `${p.tahun}-${String(p.bulan).padStart(2, '0')}-01`);
           return {
