@@ -44,6 +44,22 @@ const upload = multer({
 const ok = (res, data, msg = 'Success') => res.json({ success: true, message: msg, data });
 const fail = (res, msg, code = 400) => res.status(code).json({ success: false, message: msg });
 
+// Helper to fetch all rows beyond Supabase/PostgREST 1000 rows limit
+async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
+  let allRows = [];
+  let from = 0;
+  while (true) {
+    const q = queryBuilderFn().range(from, from + pageSize - 1);
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    allRows.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return allRows;
+}
+
 // ==================== AUTHENTICATION ====================
 app.post('/api/auth/login', async (req, res) => {
   try {
@@ -588,15 +604,16 @@ app.get('/api/absensi/rekap', async (req, res) => {
 app.get('/api/pembayaran', async (req, res) => {
   try {
     const { bulan, tahun, status, santri_id, jenis_pembayaran_id } = req.query;
-    let q = supabase.from('pembayaran')
-      .select('*, santri:santri_id(nama_lengkap, nomor_induk, no_hp_wali, no_hp_ayah, no_hp_ibu, kelas:kelas_id(nama_kelas)), jenis:jenis_pembayaran_id(nama)');
-    if (bulan) q = q.eq('bulan', bulan);
-    if (tahun) q = q.eq('tahun', tahun);
-    if (status) q = q.eq('status', status);
-    if (santri_id) q = q.eq('santri_id', santri_id);
-    if (jenis_pembayaran_id) q = q.eq('jenis_pembayaran_id', jenis_pembayaran_id);
-    const { data, error } = await q.order('created_at', { ascending: false });
-    if (error) throw error;
+    const data = await fetchAllRows(() => {
+      let q = supabase.from('pembayaran')
+        .select('*, santri:santri_id(nama_lengkap, nomor_induk, no_hp_wali, no_hp_ayah, no_hp_ibu, kelas:kelas_id(nama_kelas)), jenis:jenis_pembayaran_id(nama)');
+      if (bulan) q = q.eq('bulan', bulan);
+      if (tahun) q = q.eq('tahun', tahun);
+      if (status) q = q.eq('status', status);
+      if (santri_id) q = q.eq('santri_id', santri_id);
+      if (jenis_pembayaran_id) q = q.eq('jenis_pembayaran_id', jenis_pembayaran_id);
+      return q.order('created_at', { ascending: false });
+    });
     ok(res, data);
   } catch (e) { fail(res, e.message, 500); }
 });
@@ -1596,88 +1613,91 @@ app.get('/api/prestasi/rapot/:santri_id', async (req, res) => {
 app.get('/api/transaksi-keuangan', async (req, res) => {
   try {
     const { tipe, kategori, dari, sampai, bulan, tahun, search, include_syahriah, mode } = req.query;
-    let q = supabase.from('transaksi_keuangan').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
 
-    if (tipe && tipe !== 'semua') q = q.eq('tipe', tipe);
-    if (kategori && kategori !== 'semua') q = q.eq('kategori', kategori);
-    if (mode !== 'semua') {
-      if (dari) q = q.gte('tanggal', dari);
-      if (sampai) q = q.lte('tanggal', sampai);
-    }
+    // 1. Ambil ID jenis pembayaran Syahriah (eksklusif, bukan Tabungan Wajib)
+    const { data: jenisList } = await supabase.from('jenis_pembayaran').select('id, nama');
+    const syahriahJenisIds = (jenisList || [])
+      .filter(j => (j.nama || '').toLowerCase().includes('syahriah') && !(j.nama || '').toLowerCase().includes('tabungan'))
+      .map(j => j.id);
 
-    const { data, error } = await q;
-    if (error) throw error;
+    // 2. Fetch transaksi_keuangan dengan fetchAllRows (bypass 1000 limit)
+    let items = await fetchAllRows(() => {
+      let q = supabase.from('transaksi_keuangan').select('*').order('tanggal', { ascending: false }).order('created_at', { ascending: false });
+      if (tipe && tipe !== 'semua') q = q.eq('tipe', tipe);
+      if (kategori && kategori !== 'semua') q = q.eq('kategori', kategori);
+      if (mode !== 'semua') {
+        if (dari) q = q.gte('tanggal', dari);
+        if (sampai) q = q.lte('tanggal', sampai);
+      }
+      return q;
+    });
 
-    let items = data || [];
-
-    // Filter by month/year if no specific date range is set and mode !== 'semua'
+    // Filter transaksi_keuangan per bulan & tahun jika mode bulanan (tidak ada rentang harian dari/sampai)
     if (mode !== 'semua' && !dari && !sampai && (bulan || tahun)) {
       items = items.filter(item => {
-        const d = new Date(item.tanggal);
-        const matchYear = tahun ? d.getFullYear() === parseInt(tahun, 10) : true;
-        const matchMonth = bulan ? (d.getMonth() + 1) === parseInt(bulan, 10) : true;
+        if (!item.tanggal) return false;
+        const parts = item.tanggal.split('-');
+        const itemYear = parseInt(parts[0], 10);
+        const itemMonth = parseInt(parts[1], 10);
+        const matchYear = tahun ? itemYear === parseInt(tahun, 10) : true;
+        const matchMonth = bulan ? itemMonth === parseInt(bulan, 10) : true;
         return matchYear && matchMonth;
       });
     }
 
-    // Synchronize Syahriah payments if include_syahriah is not 'false' and tipe !== 'pengeluaran'
+    // 3. Sinkronkan pembayaran Syahriah jika include_syahriah bukan 'false' dan tipe bukan 'pengeluaran'
     const shouldIncludeSyahriah = include_syahriah !== 'false' && tipe !== 'pengeluaran';
     let syahriahItems = [];
 
-    if (shouldIncludeSyahriah) {
-      let qPay = supabase.from('pembayaran')
-        .select('*, santri:santri_id(nama_lengkap), jenis:jenis_pembayaran_id(nama)')
-        .eq('status', 'lunas');
+    if (shouldIncludeSyahriah && syahriahJenisIds.length > 0) {
+      const payData = await fetchAllRows(() => {
+        let qPay = supabase.from('pembayaran')
+          .select('*, santri:santri_id(nama_lengkap), jenis:jenis_pembayaran_id(nama)')
+          .eq('status', 'lunas')
+          .in('jenis_pembayaran_id', syahriahJenisIds);
 
-      if (mode !== 'semua') {
-        if (dari) qPay = qPay.gte('tanggal_bayar', dari);
-        if (sampai) qPay = qPay.lte('tanggal_bayar', sampai);
-        if (!dari && !sampai) {
-          if (bulan) qPay = qPay.eq('bulan', parseInt(bulan, 10));
-          if (tahun) qPay = qPay.eq('tahun', parseInt(tahun, 10));
+        if (mode !== 'semua') {
+          if (dari) qPay = qPay.gte('tanggal_bayar', dari);
+          if (sampai) qPay = qPay.lte('tanggal_bayar', sampai);
+          if (!dari && !sampai) {
+            if (bulan) qPay = qPay.eq('bulan', parseInt(bulan, 10));
+            if (tahun) qPay = qPay.eq('tahun', parseInt(tahun, 10));
+          }
         }
+        return qPay.order('tanggal_bayar', { ascending: false });
+      });
+
+      syahriahItems = (payData || []).map(p => {
+        const jenisNama = p.jenis?.nama || 'Syahriah';
+        const tgl = p.tanggal_bayar || (p.created_at ? p.created_at.split('T')[0] : `${p.tahun}-${String(p.bulan).padStart(2, '0')}-01`);
+        return {
+          id: `syahriah-${p.id}`,
+          pembayaran_id: p.id,
+          tanggal: tgl,
+          tipe: 'pemasukan',
+          kategori: jenisNama,
+          nominal: Number(p.nominal) || 0,
+          keterangan: `Pembayaran ${jenisNama} Bulan ${p.bulan}/${p.tahun} - ${p.santri?.nama_lengkap || 'Santri'}`,
+          penanggung_jawab: 'Bendahara / Kasir',
+          metode: p.metode_bayar || 'tunai',
+          is_syahriah: true,
+          created_at: p.created_at
+        };
+      });
+
+      // Filter syahriahItems berdasarkan kategori jika ada
+      if (kategori && kategori !== 'semua') {
+        syahriahItems = syahriahItems.filter(s => 
+          s.kategori.toLowerCase().includes(kategori.toLowerCase()) || 
+          kategori.toLowerCase().includes(s.kategori.toLowerCase())
+        );
       }
 
-      const { data: payData, error: payErr } = await qPay;
-      if (!payErr && payData) {
-        // Hanya sinkronkan pembayaran Syahriah (eksklusif, tidak termasuk Tabungan Wajib / infaq)
-        const onlySyahriah = payData.filter(p => {
-          const jenisNama = (p.jenis?.nama || '').toLowerCase().trim();
-          return jenisNama.includes('syahriah') && !jenisNama.includes('tabungan');
-        });
+      // Gabungkan syahriahItems ke dalam items
+      items = [...items, ...syahriahItems];
 
-        syahriahItems = onlySyahriah.map(p => {
-          const jenisNama = p.jenis?.nama || 'Syahriah';
-          const tgl = p.tanggal_bayar || (p.created_at ? p.created_at.split('T')[0] : `${p.tahun}-${String(p.bulan).padStart(2, '0')}-01`);
-          return {
-            id: `syahriah-${p.id}`,
-            pembayaran_id: p.id,
-            tanggal: tgl,
-            tipe: 'pemasukan',
-            kategori: jenisNama,
-            nominal: Number(p.nominal) || 0,
-            keterangan: `Pembayaran ${jenisNama} Bulan ${p.bulan}/${p.tahun} - ${p.santri?.nama_lengkap || 'Santri'}`,
-            penanggung_jawab: 'Bendahara / Kasir',
-            metode: p.metode_bayar || 'tunai',
-            is_syahriah: true,
-            created_at: p.created_at
-          };
-        });
-
-        // Filter syahriahItems by category if specified
-        if (kategori && kategori !== 'semua') {
-          syahriahItems = syahriahItems.filter(s => 
-            s.kategori.toLowerCase().includes(kategori.toLowerCase()) || 
-            kategori.toLowerCase().includes(s.kategori.toLowerCase())
-          );
-        }
-
-        // Merge syahriahItems into items
-        items = [...items, ...syahriahItems];
-
-        // Sort merged items by tanggal descending
-        items.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
-      }
+      // Urutkan berdasarkan tanggal descending
+      items.sort((a, b) => new Date(b.tanggal) - new Date(a.tanggal));
     }
 
     if (search) {
@@ -1696,25 +1716,18 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
     const saldoKas = totalPemasukan - totalPengeluaran;
 
     // Hitung Rekapitulasi Keseluruhan (All-Time / Saldo Real Kas TPQ)
-    const [allTkRes, allPayRes] = await Promise.all([
-      supabase.from('transaksi_keuangan').select('tipe, nominal'),
-      supabase.from('pembayaran').select('nominal, jenis:jenis_pembayaran_id(nama)').eq('status', 'lunas')
+    const [allTkRows, allSyahriahRows] = await Promise.all([
+      fetchAllRows(() => supabase.from('transaksi_keuangan').select('tipe, nominal')),
+      syahriahJenisIds.length > 0
+        ? fetchAllRows(() => supabase.from('pembayaran').select('nominal').eq('status', 'lunas').in('jenis_pembayaran_id', syahriahJenisIds))
+        : Promise.resolve([])
     ]);
 
-    const allTk = allTkRes.data || [];
-    const allTkMasuk = allTk.filter(t => t.tipe === 'pemasukan').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
-    const allTkKeluar = allTk.filter(t => t.tipe === 'pengeluaran').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+    const allTkMasuk = allTkRows.filter(t => t.tipe === 'pemasukan').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
+    const allTkKeluar = allTkRows.filter(t => t.tipe === 'pengeluaran').reduce((sum, t) => sum + Number(t.nominal || 0), 0);
 
-    let allSyahriahNominal = 0;
-    let allSyahriahCount = 0;
-    if (allPayRes.data && allPayRes.data.length > 0) {
-      const allSyahriahList = allPayRes.data.filter(p => {
-        const jNama = (p.jenis?.nama || '').toLowerCase().trim();
-        return jNama.includes('syahriah') && !jNama.includes('tabungan');
-      });
-      allSyahriahNominal = allSyahriahList.reduce((sum, p) => sum + Number(p.nominal || 0), 0);
-      allSyahriahCount = allSyahriahList.length;
-    }
+    const allSyahriahNominal = allSyahriahRows.reduce((sum, p) => sum + Number(p.nominal || 0), 0);
+    const allSyahriahCount = allSyahriahRows.length;
 
     const allPemasukanTotal = allTkMasuk + (include_syahriah !== 'false' ? allSyahriahNominal : 0);
     const allPengeluaranTotal = allTkKeluar;
@@ -1737,7 +1750,7 @@ app.get('/api/transaksi-keuangan', async (req, res) => {
         totalSyahriah: allSyahriahNominal,
         kasMasukManual: allTkMasuk,
         saldoReal: saldoReal,
-        totalTransaksi: allTk.length + (include_syahriah !== 'false' ? allSyahriahCount : 0)
+        totalTransaksi: allTkRows.length + (include_syahriah !== 'false' ? allSyahriahCount : 0)
       }
     });
   } catch (e) { fail(res, e.message, 500); }
