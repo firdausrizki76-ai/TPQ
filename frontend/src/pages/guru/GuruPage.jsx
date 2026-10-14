@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Eye, Edit, Trash2, X, Save, Download, User, Briefcase, Phone, Mail, MapPin, Loader2 } from 'lucide-react';
 import { guruAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+import StatisticsCards from '../../components/StatisticsCards';
 
 const GuruPage = () => {
   const [guruList, setGuruList] = useState([]);
@@ -148,6 +149,13 @@ const GuruPage = () => {
         <button className="btn-primary" onClick={() => openModal('add')}><Plus size={18} /> Tambah Guru</button>
       </div>
 
+      <StatisticsCards loading={loading} items={[
+        { label: 'Total Guru', value: guruList.length },
+        { label: 'Guru Aktif', value: guruList.filter(g => g.status === 'aktif').length },
+        { label: 'Guru Nonaktif', value: guruList.filter(g => g.status === 'nonaktif').length, color: '#64748b' },
+        { label: 'Laki-laki', value: guruList.filter(g => g.jenis_kelamin === 'L').length },
+        { label: 'Perempuan', value: guruList.filter(g => g.jenis_kelamin === 'P').length },
+      ]} />
       <div className="card w-full">
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div className="input-with-icon" style={{ maxWidth: '300px', width: '100%' }}>

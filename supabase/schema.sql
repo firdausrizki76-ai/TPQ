@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS kelas (
   urutan        SMALLINT NOT NULL,
   deskripsi     TEXT,
   wali_kelas_id UUID,
+  jadwal        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  zona_waktu    TEXT NOT NULL DEFAULT 'Asia/Makassar',
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -99,6 +101,10 @@ CREATE TABLE IF NOT EXISTS absensi (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tanggal         DATE NOT NULL DEFAULT CURRENT_DATE,
   waktu_scan      TIMESTAMPTZ DEFAULT NOW(),
+  waktu_datang    TIMESTAMPTZ,
+  waktu_pulang    TIMESTAMPTZ,
+  jadwal_mulai    TIMESTAMPTZ,
+  jadwal_selesai  TIMESTAMPTZ,
   tipe            VARCHAR(10) CHECK (tipe IN ('santri','guru')),
   santri_id       UUID REFERENCES santri(id) ON DELETE CASCADE,
   guru_id         UUID REFERENCES guru(id) ON DELETE CASCADE,

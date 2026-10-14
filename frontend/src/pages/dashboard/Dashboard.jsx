@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Users, UserCheck, AlertCircle, Wallet, TrendingUp, Loader2, GraduationCap, UserX, UserMinus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Users, UserCheck, TrendingUp, Loader2 } from 'lucide-react';
 import { dashboardAPI } from '../../services/api';
 import './Dashboard.css';
+import AttendanceTrend from '../../components/AttendanceTrend';
+import ClassDistribution from '../../components/ClassDistribution';
+import { dateInputValue } from '../../utils/date';
 
 const StatCard = ({ title, value, subtext, icon: Icon, trend, loading, extraInfo }) => (
   <div className="card stat-card">
@@ -36,31 +39,20 @@ const StatCard = ({ title, value, subtext, icon: Icon, trend, loading, extraInfo
 );
 
 const Dashboard = () => {
+  const [bulan, setBulan] = useState(() => dateInputValue().slice(0, 7));
   const [stats, setStats] = useState(null);
   const [aktivitas, setAktivitas] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState('');
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [statsData, aktData] = await Promise.all([
-        dashboardAPI.getStats().catch(() => null),
-        dashboardAPI.getAktivitas().catch(() => [])
-      ]);
-      if (statsData) setStats(statsData);
-      setAktivitas(aktData || []);
-    } catch (err) {
-      console.error('Dashboard load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatRp = (n) => `Rp ${(n || 0).toLocaleString('id-ID')}`;
+    let current = true;
+    Promise.all([dashboardAPI.getStats({ bulan }), dashboardAPI.getAktivitas()])
+      .then(([data, activities]) => { if (current) { setStats(data); setAktivitas(activities || []); } })
+      .catch(e => { if (current) setError(e.message); })
+      .finally(() => { if (current) setLoading(false); });
+    return () => { current = false; };
+  }, [bulan]);
 
   return (
     <div className="dashboard-page flex-col gap-6">
@@ -69,7 +61,7 @@ const Dashboard = () => {
         <p className="page-subtitle">Ringkasan aktivitas dan data TPQ hari ini.</p>
       </div>
 
-      <div className="stats-grid grid-5-cols mb-6">
+      <div className="stats-grid grid-3-cols mb-6">
         <StatCard 
           title="Total Santri" 
           value={stats?.totalSantriAktif ?? stats?.totalSantri ?? '—'} 
@@ -78,6 +70,8 @@ const Dashboard = () => {
           trend={true}
           loading={loading}
           extraInfo={stats ? [
+            { label: 'Laki-laki', value: stats.santriLakiLaki || 0, bg: '#eff6ff', color: '#1d4ed8' },
+            { label: 'Perempuan', value: stats.santriPerempuan || 0, bg: '#fdf2f8', color: '#be185d' },
             { label: 'Keluar', value: stats.totalSantriKeluar || 0, bg: '#fef2f2', color: '#991b1b' },
             { label: 'Khotam', value: stats.totalSantriKhotam || 0, bg: '#f0fdf4', color: '#166534' }
           ] : null}
@@ -100,103 +94,20 @@ const Dashboard = () => {
             { label: 'Nonaktif', value: stats.totalGuruNonaktif || 0, bg: '#fef2f2', color: '#991b1b' }
           ] : null}
         />
-        <StatCard 
-          title="Tunggakan Syahriah" 
-          value={stats ? formatRp(stats.tunggakan) : '—'} 
-          subtext="Total tunggakan belum lunas" 
-          icon={AlertCircle}
-          loading={loading}
-        />
-        <StatCard 
-          title="Total Tabungan" 
-          value={stats ? formatRp(stats.totalTabungan) : '—'} 
-          subtext="Total saldo seluruh santri" 
-          icon={Wallet} 
-          trend={true}
-          loading={loading}
-        />
       </div>
 
+      {error && <p role="alert" className="text-red-600 mb-4">{error}</p>}
       <div className="charts-grid grid-2-cols mb-6">
         <div className="card chart-card featured">
-          <h3 className="card-title">Tren Kehadiran (30 Hari)</h3>
-          <div className="mock-chart flex items-end justify-between mt-4" style={{ position: 'relative' }}>
-            {stats?.kehadiranTrendDetail?.length > 0 ? stats.kehadiranTrendDetail.map((d, i) => {
-              const maxVal = Math.max(...stats.kehadiranTrendDetail.map(x => x.hadir), 1);
-              const height = (d.hadir / maxVal) * 100;
-              const pct = d.totalAktif > 0 ? Math.round((d.hadir / d.totalAktif) * 100) : 0;
-              const showLabel = i % 5 === 0 || i === 29;
-              return (
-                <div key={i} className="chart-bar-wrapper" style={{ position: 'relative' }}>
-                  {/* Percentage label on top */}
-                  <div style={{ 
-                    fontSize: '8px', 
-                    fontWeight: '700', 
-                    color: 'var(--color-primary-container)', 
-                    textAlign: 'center', 
-                    marginBottom: '2px',
-                    opacity: showLabel ? 1 : 0,
-                    minHeight: '12px'
-                  }}>
-                    {pct}%
-                  </div>
-                  <div className="chart-bar" style={{ height: `${height}%` }} title={`${d.tanggal}: ${d.hadir} hadir (${pct}%)`}></div>
-                  {/* Date label at bottom */}
-                  {showLabel && (
-                    <div style={{ 
-                      fontSize: '7px', 
-                      color: 'var(--color-outline)', 
-                      textAlign: 'center', 
-                      marginTop: '4px',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {new Date(d.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
-                    </div>
-                  )}
-                </div>
-              );
-            }) : stats?.kehadiranTrend?.length > 0 ? stats.kehadiranTrend.map((h, i) => {
-              const maxVal = Math.max(...stats.kehadiranTrend, 1);
-              const height = (h / maxVal) * 100;
-              return (
-                <div key={i} className="chart-bar-wrapper">
-                  <div className="chart-bar" style={{ height: `${height}%` }} title={`${h} santri`}></div>
-                </div>
-              );
-            }) : (
-              <div className="w-full text-center py-10 text-gray-400">Belum ada data kehadiran</div>
-            )}
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <h3 className="card-title">Tren Kehadiran Santri</h3>
+            <label className="text-sm">Bulan <input type="month" className="input-field" style={{ width: '195px' }} value={bulan} onChange={e => { if (e.target.value && e.target.value !== bulan) { setLoading(true); setError(''); setBulan(e.target.value); } }} /></label>
           </div>
+          {loading ? <p className="py-8">Memuat grafik…</p> : <AttendanceTrend rows={stats?.kehadiranTrendDetail} />}
         </div>
-        
         <div className="card chart-card">
           <h3 className="card-title">Distribusi Santri per Kelas</h3>
-          <div className="mock-chart flex items-end mt-4" style={{ overflowX: 'auto', overflowY: 'hidden', paddingBottom: '16px', gap: '12px', height: '240px' }}>
-            {stats?.distribusiKelas?.length > 0 ? stats.distribusiKelas.map((k, i) => {
-              const maxVal = Math.max(...stats.distribusiKelas.map(x => x.value), 1);
-              const height = (k.value / maxVal) * 100;
-              return (
-                <div key={i} style={{ height: '100%', minWidth: '36px', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
-                  {/* Count label on top of bar */}
-                  <div style={{ 
-                    fontSize: '11px', 
-                    fontWeight: '800', 
-                    color: 'var(--color-primary-container)', 
-                    marginBottom: '4px',
-                    textAlign: 'center'
-                  }}>
-                    {k.value}
-                  </div>
-                  <div className="chart-bar alt" style={{ height: `${height}%`, width: '100%', minHeight: '4px' }} title={`${k.label}: ${k.value} santri`}></div>
-                  <div style={{ fontSize: '10px', marginTop: '8px', color: 'var(--color-outline)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%', textAlign: 'center', fontWeight: 'bold' }}>
-                    {k.label.length > 5 ? k.label.substring(0, 5) + '..' : k.label}
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="w-full text-center py-10 text-gray-400">Belum ada data kelas</div>
-            )}
-          </div>
+          {loading ? <p className="py-8">Memuat grafik…</p> : <ClassDistribution rows={stats?.distribusiKelas} />}
         </div>
       </div>
 
@@ -216,7 +127,7 @@ const Dashboard = () => {
             <tbody>
               {aktivitas.length > 0 ? aktivitas.map((a, i) => (
                 <tr key={i}>
-                  <td>{a.waktu_scan ? new Date(a.waktu_scan).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB' : '-'}</td>
+                  <td>{a.waktu_scan ? new Date(a.waktu_scan).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
                   <td>{a.santri?.nama_lengkap || '-'}</td>
                   <td>{a.santri?.kelas?.nama_kelas || '-'}</td>
                   <td>Absensi Kehadiran</td>

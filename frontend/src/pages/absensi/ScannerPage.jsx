@@ -11,6 +11,8 @@ const ScannerPage = () => {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState('manual'); // 'scan' or 'manual'
   const [nisInput, setNisInput] = useState('');
+  const [jenisAbsen, setJenisAbsen] = useState('datang');
+  const jenisAbsenRef = useRef('datang');
   const scannerRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -129,10 +131,10 @@ const ScannerPage = () => {
         throw new Error(`Data "${trimmedInput}" tidak ditemukan sebagai Santri atau Guru`);
       }
 
-      await absensiAPI.create({
+      const result = await absensiAPI.create({
         [type === 'santri' ? 'santri_id' : 'guru_id']: subject.id,
-        tanggal: new Date().toISOString().split('T')[0],
         tipe: type,
+        jenis_absen: type === 'guru' ? jenisAbsenRef.current : 'datang',
         status: 'hadir',
         keterangan: mode === 'scan' ? 'Scan QR/Barcode' : `Input Manual ${type === 'santri' ? 'NIS' : 'NIP'}`
       });
@@ -141,7 +143,8 @@ const ScannerPage = () => {
       setScanResult({
         nama: subject.nama_lengkap,
         nomor: type === 'santri' ? subject.nomor_induk : subject.nip,
-        waktu: new Date().toLocaleTimeString('id-ID')
+        waktu: new Date(result.waktu_pulang || result.waktu_datang || result.waktu_scan).toLocaleTimeString('id-ID'),
+        jenis: type === 'guru' ? `Guru • ${jenisAbsenRef.current === 'pulang' ? 'Pulang' : 'Datang'}` : 'Santri • Hadir'
       });
 
       setNisInput('');
@@ -193,7 +196,7 @@ const ScannerPage = () => {
       <div className="scanner-card">
         <div className="scanner-header">
           <button 
-            onClick={() => navigate('/guru/dashboard')}
+            onClick={() => navigate(window.location.pathname.startsWith('/absensi') ? '/absensi' : '/guru/dashboard')}
             className="scanner-close-btn"
             title="Tutup"
           >
@@ -222,6 +225,11 @@ const ScannerPage = () => {
         </div>
 
         <div className="scanner-body">
+          <label className="input-label" style={{ display: 'block', marginBottom: '16px' }}>Absensi Guru
+            <select className="input-field" value={jenisAbsen} disabled={loading} onChange={e => { jenisAbsenRef.current = e.target.value; setJenisAbsen(e.target.value); }}>
+              <option value="datang">Datang</option><option value="pulang">Pulang</option>
+            </select>
+          </label>
           {mode === 'manual' ? (
             <div className="manual-input-container">
               <div className="manual-icon-wrapper">
@@ -264,6 +272,7 @@ const ScannerPage = () => {
               </div>
               <h3 className="success-name">{scanResult.nama}</h3>
               <p className="success-nis">{scanResult.nomor}</p>
+              <p className="success-nis">{scanResult.jenis}</p>
               <div className="success-badge">
                 <CheckCircle size={16} />
                 <span>Absensi Berhasil</span>

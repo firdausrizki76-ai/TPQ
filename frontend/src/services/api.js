@@ -51,7 +51,7 @@ export const authAPI = {
 
 // Dashboard
 export const dashboardAPI = {
-  getStats: () => request('/dashboard/stats'),
+  getStats: (params = {}) => request(`/dashboard/stats?${new URLSearchParams(params)}`),
   getAktivitas: () => request('/dashboard/aktivitas'),
 };
 
@@ -143,6 +143,7 @@ export const tabunganAPI = {
     return request(`/tabungan${qs ? `?${qs}` : ''}`);
   },
   getSummaryGuru: () => request('/tabungan/summary-guru'),
+  getBalance: (santriId) => request(`/tabungan/${santriId}/saldo`),
   getRiwayat: (santriId, params = {}) => {
     const qs = new URLSearchParams(params).toString();
     return request(`/tabungan/${santriId}/riwayat${qs ? `?${qs}` : ''}`);

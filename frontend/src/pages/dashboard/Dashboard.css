@@ -257,3 +257,23 @@
   from { transform: translateY(20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 16px; }
+.summary-card { display: flex; flex-direction: column; gap: 10px; padding: 20px; }
+.summary-card strong { font-size: 28px; line-height: 1.2; }
+.grid-3-cols { display: grid; gap: 24px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.chart-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 20px 0; font-size: 13px; color: #64748b; }
+.chart-summary strong { color: #047857; font-size: 16px; }
+.attendance-chart { display: block; width: 100%; min-height: 180px; }
+.attendance-chart circle { cursor: pointer; }
+.attendance-chart circle:focus { outline: none; stroke: #f59e0b; stroke-width: 3; }
+.chart-detail { min-height: 22px; margin-top: 8px; font-size: 12px; color: #64748b; }
+.distribution-list { max-height: 275px; overflow: auto; padding-right: 6px; }
+.distribution-row { margin-bottom: 16px; }
+.distribution-label { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 7px; font-size: 12px; }
+.distribution-label small { font-weight: 400; color: #64748b; }
+.distribution-track { height: 9px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+.distribution-track > div { height: 100%; border-radius: inherit; transition: width 0.3s; }
+.schedule-session { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 8px; align-items: center; margin-bottom: 10px; }
+.wa-button { display: inline-flex; align-items: center; justify-content: center; padding: 6px 10px; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.wa-button[aria-disabled="true"] { color: #94a3b8; background: #f8fafc; border-color: #e2e8f0; cursor: not-allowed; }
+@media (max-width: 760px) { .grid-3-cols { grid-template-columns: 1fr; } .schedule-session { grid-template-columns: 1fr 1fr; } }

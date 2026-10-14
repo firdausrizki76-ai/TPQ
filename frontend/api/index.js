@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import { attendanceMetrics, localDate, scheduleBounds, summarizeAttendance, validateSchedule } from './attendance.js';
 
 const app = express();
 app.use(cors());
@@ -155,60 +156,44 @@ app.post('/api/auth/change-password', async (req, res) => {
 // ==================== DASHBOARD ====================
 app.get('/api/dashboard/stats', async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const [santriAktifRes, santriKeluarRes, santriKhotamRes, hadirRes, tunggakanRes, tabunganRes, trendDataRes, kelasRes, santriDistRes, guruAktifRes, guruNonaktifRes, hadirGuruRes] = await Promise.all([
-      supabase.from('santri').select('id', { count: 'exact' }).eq('status', 'aktif'),
-      supabase.from('santri').select('id', { count: 'exact' }).eq('status', 'pindah'),
-      supabase.from('santri').select('id', { count: 'exact' }).eq('status', 'lulus'),
-      supabase.from('absensi').select('id', { count: 'exact' }).eq('tanggal', today).eq('status', 'hadir').eq('tipe', 'santri'),
-      supabase.from('pembayaran').select('nominal').eq('status', 'belum'),
-      supabase.from('v_saldo_tabungan').select('saldo'),
-      supabase.from('absensi').select('tanggal').eq('tipe', 'santri').eq('status', 'hadir').gte('tanggal', thirtyDaysAgo.toISOString().split('T')[0]),
-      supabase.from('kelas').select('id, nama_kelas'),
-      supabase.from('santri').select('kelas_id').eq('status', 'aktif'),
-      supabase.from('guru').select('id', { count: 'exact' }).eq('status', 'aktif'),
-      supabase.from('guru').select('id', { count: 'exact' }).eq('status', 'nonaktif'),
-      supabase.from('absensi').select('id', { count: 'exact' }).eq('tanggal', today).eq('status', 'hadir').eq('tipe', 'guru')
+    const today = localDate();
+    const bulan = req.query.bulan || today.slice(0, 7);
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(bulan)) return fail(res, 'Bulan tidak valid');
+    const days = new Date(Date.UTC(Number(bulan.slice(0, 4)), Number(bulan.slice(5)), 0)).getUTCDate();
+    const from = `${bulan}-01`, until = `${bulan}-${days}`;
+    const [santri, guru, kelas, trendRows, todayRows] = await Promise.all([
+      fetchAllRows(() => supabase.from('santri').select('id,status,jenis_kelamin,kelas_id').order('id')),
+      fetchAllRows(() => supabase.from('guru').select('id,status').order('id')),
+      fetchAllRows(() => supabase.from('kelas').select('id,nama_kelas,urutan').order('urutan').order('id')),
+      fetchAllRows(() => supabase.from('absensi').select('tanggal,santri_id').eq('tipe','santri').eq('status','hadir').gte('tanggal',from).lte('tanggal',until).order('id')),
+      fetchAllRows(() => supabase.from('absensi').select('tipe,santri_id,guru_id').eq('tanggal',today).eq('status','hadir').order('id')),
     ]);
-
-    const totalSantriAktif = santriAktifRes.count || 0;
-    const totalSantriKeluar = santriKeluarRes.count || 0;
-    const totalSantriKhotam = santriKhotamRes.count || 0;
-    const totalSantri = totalSantriAktif; // for backward compat, kehadiran dihitung dari aktif
-    const hadirHariIni = hadirRes.count || 0;
-    const totalGuruAktif = guruAktifRes.count || 0;
-    const totalGuruNonaktif = guruNonaktifRes.count || 0;
-    const totalGuru = totalGuruAktif; // kehadiran dihitung dari guru aktif
-    const hadirGuruHariIni = hadirGuruRes.count || 0;
-    const tunggakan = (tunggakanRes.data || []).reduce((sum, p) => sum + (p.nominal || 0), 0);
-    const totalTabungan = (tabunganRes.data || []).reduce((sum, t) => sum + (t.saldo || 0), 0);
-
-    // Process Trend — include tanggal + percentage data
-    const trendMap = {};
-    (trendDataRes.data || []).forEach(a => {
-      trendMap[a.tanggal] = (trendMap[a.tanggal] || 0) + 1;
-    });
-    const kehadiranTrend = [];
-    const kehadiranTrendDetail = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const hadir = trendMap[dateStr] || 0;
-      kehadiranTrend.push(hadir);
-      kehadiranTrendDetail.push({ tanggal: dateStr, hadir, totalAktif: totalSantriAktif });
+    const active = santri.filter(s => s.status === 'aktif');
+    const activeTeachers = guru.filter(g => g.status === 'aktif');
+    const activeIds = new Set(active.map(s => s.id));
+    const teacherIds = new Set(activeTeachers.map(g => g.id));
+    const hadirHariIni = new Set(todayRows.filter(a => a.tipe === 'santri' && activeIds.has(a.santri_id)).map(a => a.santri_id)).size;
+    const hadirGuruHariIni = new Set(todayRows.filter(a => a.tipe === 'guru' && teacherIds.has(a.guru_id)).map(a => a.guru_id)).size;
+    const trendMap = new Map();
+    for (const a of trendRows) {
+      if (!trendMap.has(a.tanggal)) trendMap.set(a.tanggal, new Set());
+      trendMap.get(a.tanggal).add(a.santri_id);
     }
-
-    // Process Distribusi — only count active santri
-    const distribusiKelas = (kelasRes.data || []).map(k => {
-      const count = (santriDistRes.data || []).filter(s => s.kelas_id === k.id).length;
-      return { label: k.nama_kelas, value: count };
+    const kehadiranTrendDetail = Array.from({ length: days }, (_, i) => {
+      const tanggal = `${bulan}-${String(i + 1).padStart(2, '0')}`;
+      return { tanggal, hadir: trendMap.get(tanggal)?.size || 0, totalAktif: active.length, mendatang: tanggal > today };
     });
-
-    ok(res, { totalSantri, totalSantriAktif, totalSantriKeluar, totalSantriKhotam, hadirHariIni, totalGuru, totalGuruAktif, totalGuruNonaktif, hadirGuruHariIni, tunggakan, totalTabungan, kehadiranTrend, kehadiranTrendDetail, distribusiKelas });
+    ok(res, {
+      totalSantri: active.length, totalSantriAktif: active.length,
+      totalSantriKeluar: santri.filter(s => s.status === 'pindah').length,
+      totalSantriKhotam: santri.filter(s => s.status === 'lulus').length,
+      santriLakiLaki: active.filter(s => s.jenis_kelamin === 'L').length,
+      santriPerempuan: active.filter(s => s.jenis_kelamin === 'P').length,
+      hadirHariIni, totalGuru: activeTeachers.length, totalGuruAktif: activeTeachers.length,
+      totalGuruNonaktif: guru.filter(g => g.status === 'nonaktif').length, hadirGuruHariIni,
+      bulan, kehadiranTrendDetail,
+      distribusiKelas: kelas.map(k => ({ label: k.nama_kelas, value: active.filter(s => s.kelas_id === k.id).length })),
+    });
   } catch (e) { fail(res, e.message, 500); }
 });
 
@@ -229,8 +214,7 @@ app.get('/api/santri', async (req, res) => {
     if (search) q = q.or(`nama_lengkap.ilike.%${search}%,nomor_induk.ilike.%${search}%`);
     if (kelas) q = q.eq('kelas_id', kelas);
     if (status && status !== 'semua') q = q.eq('status', status);
-    const { data, error } = await q.order('nama_lengkap');
-    if (error) throw error;
+    const data = await fetchAllRows(() => q.order('nama_lengkap').order('id'));
     ok(res, data);
   } catch (e) { fail(res, e.message, 500); }
 });
@@ -334,8 +318,7 @@ app.get('/api/guru', async (req, res) => {
     const { search } = req.query;
     let q = supabase.from('guru').select('*');
     if (search) q = q.or(`nama_lengkap.ilike.%${search}%,nip.ilike.%${search}%`);
-    const { data, error } = await q.order('nama_lengkap');
-    if (error) throw error;
+    const data = await fetchAllRows(() => q.order('nama_lengkap').order('id'));
     ok(res, data);
   } catch (e) { fail(res, e.message, 500); }
 });
@@ -438,7 +421,7 @@ app.get('/api/kelas', async (req, res) => {
     if (error) throw error;
     
     // Get santri count per kelas
-    const { data: counts } = await supabase.from('santri').select('kelas_id').eq('status', 'aktif');
+    const counts = await fetchAllRows(() => supabase.from('santri').select('kelas_id').eq('status', 'aktif').order('id'));
     const countMap = {};
     (counts || []).forEach(s => { countMap[s.kelas_id] = (countMap[s.kelas_id] || 0) + 1; });
     
@@ -474,6 +457,10 @@ app.get('/api/kelas/:id/santri', async (req, res) => {
 
 app.put('/api/kelas/:id', async (req, res) => {
   try {
+    if (Object.hasOwn(req.body, 'jadwal')) {
+      try { req.body.jadwal = validateSchedule(req.body.jadwal, req.body.zona_waktu || 'Asia/Makassar'); }
+      catch (e) { return fail(res, e.message); }
+    }
     const { data, error } = await supabase.from('kelas').update(req.body).eq('id', req.params.id).select().single();
     if (error) throw error;
     ok(res, data);
@@ -483,7 +470,7 @@ app.put('/api/kelas/:id', async (req, res) => {
 // ==================== ABSENSI ====================
 app.get('/api/absensi', async (req, res) => {
   try {
-    const { tanggal, kelas, search, santri_id, role } = req.query;
+    const { tanggal, kelas, search, santri_id, guru_id, role } = req.query;
     const tipe = role || 'santri'; // Default ke santri jika tidak ada role
     
     // Gunakan left join (tanpa !inner) agar data absensi tetap muncul meskipun relasinya null
@@ -499,45 +486,54 @@ app.get('/api/absensi', async (req, res) => {
       if (santri_id) q = q.eq('santri_id', santri_id);
       if (search) q = q.ilike('santri.nama_lengkap', `%${search}%`);
     } else {
+      if (guru_id) q = q.eq('guru_id', guru_id);
       if (search) q = q.ilike('guru.nama_lengkap', `%${search}%`);
     }
     
-    const { data, error } = await q.order('tanggal', { ascending: false }).order('waktu_scan', { ascending: false });
-    if (error) throw error;
-    ok(res, data);
+    const data = await fetchAllRows(() => q.order('tanggal', { ascending: false }).order('waktu_scan', { ascending: false }).order('id'));
+    ok(res, data.map(attendanceMetrics));
   } catch (e) { fail(res, e.message, 500); }
 });
 
 app.post('/api/absensi', async (req, res) => {
   try {
-    const { santri_id, guru_id, tanggal, tipe } = req.body;
-    
-    // 1. Cek duplikasi untuk Santri ATAU Guru (1x sehari)
-    const idToCheck = tipe === 'santri' ? santri_id : guru_id;
-    const fieldToCheck = tipe === 'santri' ? 'santri_id' : 'guru_id';
-
-    if (idToCheck && tanggal) {
-      const { data: existing } = await supabase
-        .from('absensi')
-        .select('id')
-        .eq(fieldToCheck, idToCheck)
-        .eq('tanggal', tanggal)
-        .maybeSingle();
-      
-      if (existing) {
-        return ok(res, existing, `${tipe === 'santri' ? 'Santri' : 'Guru'} sudah diabsenkan hari ini`);
-      }
+    const { santri_id, guru_id, tipe, jenis_absen = 'datang', status = 'hadir', keterangan } = req.body;
+    if (!['guru', 'santri'].includes(tipe) || !['datang', 'pulang'].includes(jenis_absen) || !['hadir', 'sakit', 'izin', 'alfa'].includes(status)) return fail(res, 'Tipe atau status absensi tidak valid');
+    const personId = tipe === 'santri' ? santri_id : guru_id;
+    if (!personId || (tipe === 'santri' ? guru_id : santri_id)) return fail(res, 'Subjek absensi tidak valid');
+    const { data: person, error: personError } = await supabase.from(tipe === 'santri' ? 'santri' : 'guru').select('*').eq('id', personId).single();
+    if (personError) throw personError;
+    if (person.status !== 'aktif') return fail(res, 'Absensi hanya untuk santri/guru aktif');
+    const { data: classes, error: classError } = await (tipe === 'guru'
+      ? supabase.from('kelas').select('*').eq('wali_kelas_id', personId)
+      : supabase.from('kelas').select('*').eq('id', person.kelas_id || '00000000-0000-0000-0000-000000000000'));
+    if (classError) throw classError;
+    const now = new Date();
+    const tanggal = req.body.tanggal || localDate(now, classes[0]?.zona_waktu || 'Asia/Makassar');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(tanggal) || Number.isNaN(Date.parse(tanggal)) || new Date(`${tanggal}T12:00:00Z`).toISOString().slice(0, 10) !== tanggal) return fail(res, 'Tanggal tidak valid');
+    const timestamp = req.body.waktu_scan ? new Date(req.body.waktu_scan) : now;
+    if (Number.isNaN(timestamp.getTime())) return fail(res, 'Waktu absensi tidak valid');
+    const field = tipe === 'santri' ? 'santri_id' : 'guru_id';
+    const { data: records, error: existingError } = await supabase.from('absensi').select('*').eq('tipe', tipe).eq(field, personId).eq('tanggal', tanggal).order('waktu_scan').limit(1);
+    if (existingError) throw existingError;
+    const existing = records?.[0];
+    if (jenis_absen === 'pulang') {
+      if (tipe !== 'guru' || status !== 'hadir') return fail(res, 'Absensi pulang hanya untuk guru hadir');
+      if (!existing || existing.status !== 'hadir') return fail(res, 'Catat absensi datang terlebih dahulu');
+      if (existing.waktu_pulang) return ok(res, attendanceMetrics(existing), 'Absensi pulang sudah tercatat');
+      if (timestamp <= new Date(existing.waktu_datang || existing.waktu_scan)) return fail(res, 'Waktu pulang harus setelah waktu datang');
+      const { data: updated, error } = await supabase.from('absensi').update({ waktu_pulang: timestamp.toISOString() }).eq('id', existing.id).is('waktu_pulang', null).select().maybeSingle();
+      if (error) throw error;
+      if (!updated) return fail(res, 'Absensi pulang baru saja dicatat. Muat ulang data.', 409);
+      return ok(res, attendanceMetrics(updated), 'Absensi pulang berhasil dicatat');
     }
-
-    // 2. Bersihkan body dari id & waktu_scan jika ada (biar DB yang generate otomatis)
-    const insertData = { ...req.body };
-    delete insertData.id;
-    if (!insertData.waktu_scan) delete insertData.waktu_scan;
-
+    if (existing) return ok(res, attendanceMetrics(existing), 'Absensi hari ini sudah tercatat');
+    const bounds = status === 'hadir' ? scheduleBounds(classes || [], tanggal) : { jadwal_mulai: null, jadwal_selesai: null };
+    const insertData = { tipe, [field]: personId, tanggal, status, keterangan, waktu_scan: timestamp.toISOString(), waktu_datang: status === 'hadir' ? timestamp.toISOString() : null, ...bounds };
     const { data, error } = await supabase.from('absensi').insert(insertData).select().single();
+    if (error?.code === '23505') return fail(res, 'Absensi baru saja dicatat. Muat ulang data.', 409);
     if (error) throw error;
-    
-    ok(res, data, 'Absensi berhasil dicatat');
+    ok(res, attendanceMetrics(data), 'Absensi berhasil dicatat');
   } catch (e) { 
     console.error('Absensi Error:', e.message);
     fail(res, e.message, 500); 
@@ -546,7 +542,9 @@ app.post('/api/absensi', async (req, res) => {
 
 app.put('/api/absensi/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('absensi').update(req.body).eq('id', req.params.id).select().single();
+    const changes = Object.fromEntries(Object.entries(req.body).filter(([key]) => ['status', 'keterangan'].includes(key)));
+    if (changes.status && !['hadir', 'izin', 'sakit', 'alfa'].includes(changes.status)) return fail(res, 'Status tidak valid');
+    const { data, error } = await supabase.from('absensi').update(changes).eq('id', req.params.id).select().single();
     if (error) throw error;
     ok(res, data, 'Absensi berhasil diperbarui');
   } catch (e) { fail(res, e.message, 500); }
@@ -571,32 +569,8 @@ app.get('/api/absensi/rekap', async (req, res) => {
     let q = supabase.from('absensi').select(selectStr).eq('tipe', role);
     if (tanggal_mulai) q = q.gte('tanggal', tanggal_mulai);
     if (tanggal_selesai) q = q.lte('tanggal', tanggal_selesai);
-    const { data, error } = await q.order('tanggal', { ascending: false });
-    if (error) throw error;
-    // Group by person
-    const map = {};
-    (data || []).forEach(a => {
-      const personId = role === 'santri' ? a.santri_id : a.guru_id;
-      const person = role === 'santri' ? a.santri : a.guru;
-      if (!personId) return;
-      if (!map[personId]) {
-        map[personId] = {
-          id: personId,
-          nama: person?.nama_lengkap || '-',
-          kelas: person?.kelas?.nama_kelas || '-',
-          kelas_id: person?.kelas_id || null,
-          hadir: 0, izin: 0, sakit: 0, alfa: 0, total: 0
-        };
-      }
-      map[personId][a.status] = (map[personId][a.status] || 0) + 1;
-      map[personId].total++;
-    });
-    let result = Object.values(map);
-    if (kelas_id && role === 'santri') {
-      result = result.filter(r => r.kelas_id === kelas_id);
-    }
-    result.sort((a, b) => a.nama.localeCompare(b.nama));
-    ok(res, result);
+    const data = await fetchAllRows(() => q.order('tanggal', { ascending: false }).order('id'));
+    ok(res, summarizeAttendance(data, role, kelas_id));
   } catch (e) { fail(res, e.message, 500); }
 });
 
@@ -758,7 +732,7 @@ app.get('/api/tabungan', async (req, res) => {
     
     // 1. Ambil data santri dasar dulu
     let q = supabase.from('santri')
-      .select('id, nomor_induk, nama_lengkap, status, kelas_id, kelas:kelas_id(id, nama_kelas, wali_kelas_id)')
+      .select('id, nomor_induk, nama_lengkap, no_hp_wali, no_hp_ayah, no_hp_ibu, status, kelas_id, kelas:kelas_id(id, nama_kelas, wali_kelas_id)')
       .eq('status', 'aktif');
     
     if (guru_id) {
@@ -769,15 +743,10 @@ app.get('/api/tabungan', async (req, res) => {
       q = q.in('kelas_id', classIds);
     }
 
-    const { data: santriList, error: errSantri } = await q.order('nama_lengkap');
-    
-    if (errSantri) {
-      console.error('Error Santri:', errSantri);
-      throw errSantri;
-    }
+    const santriList = await fetchAllRows(() => q.order('nama_lengkap').order('id'));
 
     // 2. Ambil data saldo
-    const { data: saldoData } = await supabase.from('v_saldo_tabungan').select('santri_id, saldo');
+    const saldoData = await fetchAllRows(() => supabase.from('v_saldo_tabungan').select('santri_id, saldo').order('santri_id'));
     
     const saldoMap = {};
     (saldoData || []).forEach(s => { saldoMap[s.santri_id] = s.saldo; });
@@ -787,6 +756,9 @@ app.get('/api/tabungan', async (req, res) => {
       id: s.id,
       nomor_induk: s.nomor_induk,
       nama_lengkap: s.nama_lengkap,
+      no_hp_wali: s.no_hp_wali,
+      no_hp_ayah: s.no_hp_ayah,
+      no_hp_ibu: s.no_hp_ibu,
       kelas: s.kelas,
       saldo: saldoMap[s.id] || 0
     }));
@@ -832,6 +804,18 @@ app.get('/api/tabungan/summary-guru', async (req, res) => {
     });
 
     ok(res, Object.values(teacherMap));
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+app.get('/api/tabungan/:santriId/saldo', async (req, res) => {
+  try {
+    const [person, balance] = await Promise.all([
+      supabase.from('santri').select('id,nama_lengkap,nomor_induk,no_hp_wali,no_hp_ayah,no_hp_ibu').eq('id', req.params.santriId).single(),
+      supabase.from('v_saldo_tabungan').select('saldo').eq('santri_id', req.params.santriId).maybeSingle(),
+    ]);
+    if (person.error) throw person.error;
+    if (balance.error) throw balance.error;
+    ok(res, { ...person.data, saldo: Number(balance.data?.saldo || 0) });
   } catch (e) { fail(res, e.message, 500); }
 });
 
@@ -1138,7 +1122,7 @@ app.post('/api/ujian/register', async (req, res) => {
 app.get('/api/ujian/riwayat-all', async (req, res) => {
   try {
     const { data, error } = await supabase.from('riwayat_kelas')
-      .select('*, santri:santri_id(nama_lengkap, nomor_induk, kelas:kelas_id(nama_kelas)), kelas_dari:kelas_dari_id(nama_kelas), kelas_ke:kelas_ke_id(nama_kelas)')
+      .select('*, santri:santri_id(nama_lengkap, nomor_induk, no_hp_wali, no_hp_ayah, no_hp_ibu, kelas:kelas_id(nama_kelas)), kelas_dari:kelas_dari_id(nama_kelas), kelas_ke:kelas_ke_id(nama_kelas)')
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) throw error;

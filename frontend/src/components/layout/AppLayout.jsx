@@ -69,7 +69,7 @@ const AppLayout = () => {
             {menuItems.map(item => (
               <button 
                 key={item.path}
-                className={`nav-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
+                className={`nav-item ${location.pathname === item.path || location.pathname.startsWith(`${item.path}/`) ? 'active' : ''}`}
                 onClick={() => {
                   navigate(item.path);
                   closeMobileMenu();

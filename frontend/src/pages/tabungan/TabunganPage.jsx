@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, ArrowDownCircle, ArrowUpCircle, X, Save, Users, CreditCard, Calendar, Wallet, Loader2, Send, Printer, History, Trash2 } from 'lucide-react';
 import { tabunganAPI, santriAPI, laporanAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+import WhatsAppLink from '../../components/WhatsAppLink';
+import { balanceMessage } from '../../utils/whatsapp';
 
 const TabunganPage = () => {
   const [santriData, setSantriData] = useState([]);
@@ -17,6 +19,8 @@ const TabunganPage = () => {
   const [rekapGuru, setRekapGuru] = useState([]);
   const [activeTab, setActiveTab] = useState('santri'); // 'santri', 'rekap_guru', 'rekap_admin'
   const [searchTerm, setSearchTerm] = useState('');
+  const [saldoSort, setSaldoSort] = useState('saldo_desc');
+  const [guruSort, setGuruSort] = useState('setoran_desc');
   const [riwayatFilter, setRiwayatFilter] = useState({ 
     month: new Date().getMonth() + 1, 
     year: new Date().getFullYear() 
@@ -154,7 +158,11 @@ const TabunganPage = () => {
   const filteredData = santriData.filter(s => 
     (s.nama_lengkap || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
     (s.nomor_induk || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ).sort((a, b) => saldoSort === 'nama' ? a.nama_lengkap.localeCompare(b.nama_lengkap) : (saldoSort === 'saldo_desc' ? Number(b.saldo) - Number(a.saldo) : Number(a.saldo) - Number(b.saldo)) || a.nama_lengkap.localeCompare(b.nama_lengkap));
+  const sortedGuruRekap = [...rekapGuru].sort((a, b) => {
+    const field = guruSort === 'koleksi_desc' ? 'total_koleksi' : guruSort === 'saldo_desc' ? 'saldo_di_guru' : 'total_setoran';
+    return guruSort === 'nama' ? a.nama_guru.localeCompare(b.nama_guru) : Number(b[field]) - Number(a[field]) || a.nama_guru.localeCompare(b.nama_guru);
+  });
 
   const myRekap = rekapGuru.find(r => r.guru_id === user.id) || { saldo_di_guru: 0 };
 
@@ -413,8 +421,15 @@ const TabunganPage = () => {
       )}
 
       {isAdmin && activeTab === 'rekap_guru' && (
+        <label className="flex items-center gap-3 mb-4 no-print">Urutkan guru
+          <select className="input-field" style={{ maxWidth: '280px' }} value={guruSort} onChange={e => setGuruSort(e.target.value)}>
+            <option value="setoran_desc">Setoran ke pusat terbanyak</option><option value="koleksi_desc">Koleksi tabungan terbanyak</option><option value="saldo_desc">Saldo di guru terbanyak</option><option value="nama">Nama A–Z</option>
+          </select>
+        </label>
+      )}
+      {isAdmin && activeTab === 'rekap_guru' && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginBottom: '24px' }} className="no-print">
-          {rekapGuru.map((g, idx) => (
+          {sortedGuruRekap.map((g, idx) => (
             <div key={idx} className="card" style={{ padding: '20px', borderLeft: '4px solid #f59e0b', backgroundColor: 'white', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
                 <div>
@@ -471,6 +486,11 @@ const TabunganPage = () => {
               <Search className="icon" size={18} color="#94a3b8" />
               <input type="text" className="input-field" style={{ backgroundColor: 'white', borderRadius: '8px' }} placeholder="Cari nama santri..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
+            <label className="flex items-center gap-2">Urutkan saldo
+              <select className="input-field" style={{ maxWidth: '220px' }} value={saldoSort} onChange={e => setSaldoSort(e.target.value)}>
+                <option value="saldo_desc">Saldo terbanyak</option><option value="saldo_asc">Saldo terkecil</option><option value="nama">Nama A–Z</option>
+              </select>
+            </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: '8px', color: '#047857', fontWeight: 'bold', fontSize: '14px' }}>
               <Wallet size={18} />
               Total Tabungan: <span style={{ fontSize: '16px', fontWeight: '900', marginLeft: '4px' }}>{formatRp(totalSaldo)}</span>
@@ -492,6 +512,11 @@ const TabunganPage = () => {
                     <td style={{ fontWeight: '900', color: '#047857' }}>{formatRp(s.saldo)}</td>
                     <td>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                        <WhatsAppLink santri={s} message={balanceMessage(s)} label="WA Saldo" refresh={async () => {
+                          const latest = await tabunganAPI.getBalance(s.id);
+                          setSantriData(data => data.map(row => row.id === s.id ? { ...row, ...latest } : row));
+                          return { santri: latest, message: balanceMessage(latest) };
+                        }} />
                         <button 
                           onClick={() => openRiwayat(s)}
                           style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 10px', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: '6px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer' }}

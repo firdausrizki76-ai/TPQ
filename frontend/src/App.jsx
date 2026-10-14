@@ -78,6 +78,7 @@ function App() {
           <Route path="/guru" element={<GuruPage />} />
           <Route path="/kelas" element={<KelasPage />} />
           <Route path="/absensi" element={<AbsensiPage />} />
+          <Route path="/absensi/scan" element={<ScannerPage />} />
           <Route path="/prestasi" element={<PrestasiAdminPage />} />
           <Route path="/ujian" element={<UjianPage />} />
           <Route path="/pembayaran" element={<PembayaranPage />} />

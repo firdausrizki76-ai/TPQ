@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, QrCode, Download, Printer, X, Calendar, Users, FileText, Loader2, BarChart3 } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, QrCode, Download, Printer, X, Calendar, Users, FileText, Loader2, BarChart3 } from 'lucide-react';
 import { absensiAPI, kelasAPI, santriAPI, guruAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+import { Link } from 'react-router-dom';
+import StatisticsCards from '../../components/StatisticsCards';
+import { dateInputValue, formatDuration } from '../../utils/date';
 
 const AbsensiPage = () => {
   const [absensiList, setAbsensiList] = useState([]);
@@ -9,7 +12,9 @@ const AbsensiPage = () => {
   const [loading, setLoading] = useState(true);
   const [activeModal, setActiveModal] = useState(null);
   const [selectedKelas, setSelectedKelas] = useState('');
-  const [filterTanggal, setFilterTanggal] = useState(new Date().toISOString().split('T')[0]);
+  const [filterTanggal, setFilterTanggal] = useState(dateInputValue);
+  const [timeFilter, setTimeFilter] = useState('');
+  const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('santri'); // 'santri' or 'guru'
   const [searchQuery, setSearchQuery] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -18,30 +23,39 @@ const AbsensiPage = () => {
   const [rekapData, setRekapData] = useState([]);
   const [loadingRekap, setLoadingRekap] = useState(false);
   const [rekapTipe, setRekapTipe] = useState('santri');
-  const [rekapDari, setRekapDari] = useState(() => { const d = new Date(); d.setDate(1); return d.toISOString().split('T')[0]; });
-  const [rekapSampai, setRekapSampai] = useState(new Date().toISOString().split('T')[0]);
+  const [rekapDari, setRekapDari] = useState(() => { const d = new Date(); d.setDate(1); return dateInputValue(d); });
+  const [rekapSampai, setRekapSampai] = useState(dateInputValue);
   const [rekapKelas, setRekapKelas] = useState('');
+  const attendanceRequest = useRef({ version: 0 });
+  const recapRequest = useRef(0);
 
 
-  useEffect(() => { loadData(); }, []);
-  useEffect(() => { loadAbsensi(); }, [filterTanggal, activeTab]);
-
-  const loadData = async () => {
-    try { const kelas = await kelasAPI.getAll(); setKelasList(kelas || []); } catch (e) { console.error(e); }
-    loadAbsensi();
-  };
-
-  const loadAbsensi = async () => {
+  const loadAbsensi = useCallback(async () => {
+    const requestId = ++attendanceRequest.current.version;
+    if (activeTab === 'rekap' || !filterTanggal) return;
+    setError('');
     setLoading(true);
     try { 
       const data = await absensiAPI.getAll({ 
         tanggal: filterTanggal,
         role: activeTab 
       }); 
-      setAbsensiList(data || []); 
-    } catch (e) { console.error(e); }
-    setLoading(false);
-  };
+      if (requestId === attendanceRequest.current.version) setAbsensiList(data || []);
+    } catch (e) { if (requestId === attendanceRequest.current.version) { setError(e.message); setAbsensiList([]); } }
+    if (requestId === attendanceRequest.current.version) setLoading(false);
+  }, [activeTab, filterTanggal]);
+
+  useEffect(() => {
+    let current = true;
+    kelasAPI.getAll().then(data => { if (current) setKelasList(data || []); }).catch(e => { if (current) setError(e.message); });
+    return () => { current = false; };
+  }, []);
+  useEffect(() => {
+    let current = true;
+    const counter = attendanceRequest.current;
+    Promise.resolve().then(() => { if (current) loadAbsensi(); });
+    return () => { current = false; counter.version++; };
+  }, [loadAbsensi]);
 
   const handleGenerateQR = async () => {
     if (!selectedKelas) return;
@@ -68,14 +82,17 @@ const AbsensiPage = () => {
   const closeModal = () => { setActiveModal(null); setQrResults([]); setSelectedKelas(''); };
 
   const loadRekap = async (tipe = rekapTipe, dari = rekapDari, sampai = rekapSampai, kelas_id = rekapKelas) => {
+    const requestId = ++recapRequest.current;
+    if (!dari || !sampai || dari > sampai) { setError('Rentang tanggal tidak valid'); return; }
+    setError('');
     setLoadingRekap(true);
     try {
       const params = { tipe, tanggal_mulai: dari, tanggal_selesai: sampai };
       if (kelas_id) params.kelas_id = kelas_id;
       const data = await absensiAPI.getRekap(params);
-      setRekapData(data || []);
-    } catch (e) { console.error(e); setRekapData([]); }
-    setLoadingRekap(false);
+      if (requestId === recapRequest.current) setRekapData(data || []);
+    } catch (e) { if (requestId === recapRequest.current) { setError(e.message); setRekapData([]); } }
+    if (requestId === recapRequest.current) setLoadingRekap(false);
   };
 
 
@@ -109,11 +126,29 @@ const AbsensiPage = () => {
     return <span className="badge" style={styles[status] || {}}>{status}</span>;
   };
 
+  const filteredAttendance = absensiList.filter(a => {
+    const name = activeTab === 'santri' ? a.santri?.nama_lengkap : a.guru?.nama_lengkap;
+    return (name || '').toLowerCase().includes(searchQuery.toLowerCase()) &&
+      (!timeFilter || (timeFilter === 'terlambat' && a.terlambat_menit > 0) || (timeFilter === 'tepat' && a.terlambat_menit === 0) || (timeFilter === 'cepat' && a.pulang_cepat_menit > 0) || (timeFilter === 'belum' && a.status === 'hadir' && !a.waktu_pulang));
+  });
+  const validAttendance = absensiList.filter(a => !a.keterangan?.includes('(MENUNGGU PERSETUJUAN)'));
+  const summary = activeTab === 'rekap' ? rekapData.reduce((s, r) => ({ hadir: s.hadir + r.hadir, izin: s.izin + r.izin, sakit: s.sakit + r.sakit, alfa: s.alfa + r.alfa, total: s.total + r.total, terlambat: s.terlambat + r.terlambat, pulang_cepat: s.pulang_cepat + r.pulang_cepat }), { hadir: 0, izin: 0, sakit: 0, alfa: 0, total: 0, terlambat: 0, pulang_cepat: 0 }) : {
+    hadir: validAttendance.filter(a => a.status === 'hadir').length,
+    izin: validAttendance.filter(a => a.status === 'izin').length,
+    sakit: validAttendance.filter(a => a.status === 'sakit').length,
+    alfa: validAttendance.filter(a => a.status === 'alfa').length,
+    total: validAttendance.length,
+    terlambat: validAttendance.filter(a => a.terlambat_menit > 0).length,
+    pulang_cepat: validAttendance.filter(a => a.pulang_cepat_menit > 0).length,
+  };
+  const timeText = value => value ? new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '—';
+
   return (
     <div className="flex-col gap-6 w-full">
       <div className="page-header mb-6 flex justify-between items-center flex-wrap gap-4">
         <div><h1 className="page-title">Rekap Absensi</h1><p className="page-subtitle">Pantau kehadiran santri dan guru</p></div>
         <div className="flex gap-2">
+          <Link to="/absensi/scan" className="btn-primary"><QrCode size={18} /> Catat Datang / Pulang</Link>
           <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} onClick={() => setActiveModal('qr_massal')}><QrCode size={18} /> Generate QR Massal</button>
           <button className="btn-primary" onClick={() => setActiveModal('cetak_laporan')}><Printer size={18} /> Cetak Laporan</button>
         </div>
@@ -132,13 +167,21 @@ const AbsensiPage = () => {
             backgroundColor: activeTab === tab.id ? '#f0fdf4' : '#ffffff',
             color: activeTab === tab.id ? '#047857' : '#6b7280',
             boxShadow: activeTab === tab.id ? '0 4px 6px -1px rgba(16, 185, 129, 0.1)' : 'none'
-          }} onClick={() => { setActiveTab(tab.id); if (tab.id === 'rekap') loadRekap(); }}>
+          }} onClick={() => { setActiveTab(tab.id); setTimeFilter(''); if (tab.id === 'rekap') loadRekap(); }}>
             <tab.icon size={18} /> {tab.label}
           </button>
         ))}
       </div>
 
 
+      {error && <p role="alert" className="text-red-600 mb-4">{error}</p>}
+      <StatisticsCards loading={activeTab === 'rekap' ? loadingRekap : loading} items={[
+        { label: 'Hadir', value: summary.hadir }, { label: 'Izin', value: summary.izin, color: '#2563eb' },
+        { label: 'Sakit', value: summary.sakit, color: '#a16207' }, { label: 'Alfa', value: summary.alfa, color: '#dc2626' },
+        { label: 'Kehadiran', value: `${summary.total ? Math.round(summary.hadir / summary.total * 100) : 0}%`, description: 'Dari catatan yang disetujui' },
+        { label: 'Terlambat', value: summary.terlambat, color: '#c2410c' },
+        ...((activeTab === 'guru' || activeTab === 'rekap' && rekapTipe === 'guru') ? [{ label: 'Pulang Cepat', value: summary.pulang_cepat, color: '#c2410c' }] : []),
+      ]} />
       {activeTab !== 'rekap' ? (
       <div className="card w-full">
         <div className="flex items-center justify-between mb-8 gap-4 flex-wrap no-print">
@@ -147,6 +190,10 @@ const AbsensiPage = () => {
               <Calendar className="icon" size={18} />
               <input type="date" className="input-field" style={{ paddingLeft: '40px' }} value={filterTanggal} onChange={(e) => setFilterTanggal(e.target.value)} />
             </div>
+            <select className="input-field" style={{ maxWidth: '220px' }} aria-label="Filter ketepatan waktu" value={timeFilter} onChange={e => setTimeFilter(e.target.value)}>
+              <option value="">Semua ketepatan waktu</option><option value="terlambat">Datang terlambat</option><option value="tepat">Tidak terlambat</option>
+              {activeTab === 'guru' && <><option value="cepat">Pulang cepat</option><option value="belum">Belum absen pulang</option></>}
+            </select>
             <div className="input-with-icon" style={{ maxWidth: '300px', width: '100%' }}>
               <Search className="icon" size={18} />
               <input 
@@ -166,38 +213,31 @@ const AbsensiPage = () => {
               <tr>
                 <th>No</th>
                 <th>Tanggal</th>
-                <th>Waktu Scan</th>
+                <th>Datang</th>
+                {activeTab === 'guru' && <><th>Pulang</th><th>Durasi Mengajar</th></>}
                 <th>Nama {activeTab === 'santri' ? 'Santri' : 'Guru'}</th>
                 {activeTab === 'santri' && <th>Kelas</th>}
                 <th>Status</th>
+                <th>Ketepatan Waktu</th>
                 <th>Keterangan</th>
                 <th width="150">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? <tr><td colSpan={activeTab === 'santri' ? 8 : 7} className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
-              : absensiList.length === 0 ? <tr><td colSpan={activeTab === 'santri' ? 8 : 7} className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data absensi {activeTab === 'santri' ? 'santri' : 'guru'} untuk tanggal ini</td></tr>
-              : absensiList
-                  .filter(a => {
-                    const name = activeTab === 'santri' ? a.santri?.nama_lengkap : a.guru?.nama_lengkap;
-                    return (name || '').toLowerCase().includes(searchQuery.toLowerCase());
-                  })
-                  .map((a, i) => (
+              {loading ? <tr><td colSpan={activeTab === 'santri' ? 9 : 10} className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
+              : filteredAttendance.length === 0 ? <tr><td colSpan={activeTab === 'santri' ? 9 : 10} className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data yang sesuai filter</td></tr>
+              : filteredAttendance.map((a, i) => (
                 <tr key={a.id}>
                   <td>{i+1}</td>
                   <td>{a.tanggal ? new Date(a.tanggal).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</td>
-                  <td>{a.waktu_scan ? new Date(a.waktu_scan).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' ' + (() => {
-                    const offset = -(new Date().getTimezoneOffset() / 60);
-                    if (offset === 7) return 'WIB';
-                    if (offset === 8) return 'WITA';
-                    if (offset === 9) return 'WIT';
-                    return '';
-                  })() : '-'}</td>
+                  <td>{timeText(a.waktu_datang)}</td>
+                  {activeTab === 'guru' && <><td>{timeText(a.waktu_pulang)}</td><td>{a.status === 'hadir' ? formatDuration(a.durasi_menit) : '—'}</td></>}
                   <td className="font-medium">
                     {activeTab === 'santri' ? (a.santri?.nama_lengkap || '-') : (a.guru?.nama_lengkap || '-')}
                   </td>
                   {activeTab === 'santri' && <td>{a.santri?.kelas?.nama_kelas || '-'}</td>}
                   <td>{statusBadge(a.status, a.keterangan)}</td>
+                  <td>{a.status !== 'hadir' ? '—' : <><span className={`badge ${a.terlambat_menit === 0 ? 'badge-success' : ''}`} style={a.terlambat_menit > 0 ? { background: '#fff7ed', color: '#c2410c' } : {}}>{a.terlambat_menit == null ? 'Jadwal belum tersedia' : a.terlambat_menit > 0 ? `Terlambat ${a.terlambat_menit} menit` : 'Tidak terlambat'}</span>{activeTab === 'guru' && a.waktu_pulang && <div className="text-xs mt-2">{a.pulang_cepat_menit == null ? 'Jadwal pulang belum tersedia' : a.pulang_cepat_menit > 0 ? `Pulang cepat ${a.pulang_cepat_menit} menit` : 'Pulang sesuai jadwal'}</div>}</>}</td>
                   <td>{a.keterangan || '-'}</td>
                   <td className="text-center">
                     <div className="flex justify-center items-center gap-2">
@@ -266,11 +306,13 @@ const AbsensiPage = () => {
                 <th style={{ backgroundColor: '#fefce8', color: '#854d0e' }}>Sakit</th>
                 <th style={{ backgroundColor: '#fef2f2', color: '#991b1b' }}>Alfa</th>
                 <th>Total</th>
+                <th>Kehadiran</th><th>Terlambat</th>
+                {rekapTipe === 'guru' && <><th>Pulang Cepat</th><th>Durasi Mengajar</th><th>Belum Pulang</th></>}
               </tr>
             </thead>
             <tbody>
-              {loadingRekap ? <tr><td colSpan={rekapTipe === 'santri' ? 8 : 7} className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
-              : rekapData.length === 0 ? <tr><td colSpan={rekapTipe === 'santri' ? 8 : 7} className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data rekap. Klik "Tampilkan" untuk memuat.</td></tr>
+              {loadingRekap ? <tr><td colSpan={rekapTipe === 'santri' ? 10 : 12} className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
+              : rekapData.length === 0 ? <tr><td colSpan={rekapTipe === 'santri' ? 10 : 12} className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data rekap. Klik "Tampilkan" untuk memuat.</td></tr>
               : rekapData.map((r, i) => (
                 <tr key={r.id}>
                   <td>{i+1}</td>
@@ -281,6 +323,8 @@ const AbsensiPage = () => {
                   <td style={{ fontWeight: '700', color: '#854d0e' }}>{r.sakit || 0}</td>
                   <td style={{ fontWeight: '700', color: '#991b1b' }}>{r.alfa || 0}</td>
                   <td style={{ fontWeight: '700' }}>{r.total || 0}</td>
+                  <td>{r.total ? Math.round(r.hadir / r.total * 100) : 0}%</td><td>{r.terlambat || 0}</td>
+                  {rekapTipe === 'guru' && <><td>{r.pulang_cepat || 0}</td><td>{formatDuration(r.durasi_menit)}</td><td>{r.belum_pulang || 0}</td></>}
                 </tr>
               ))}
             </tbody>
@@ -293,6 +337,8 @@ const AbsensiPage = () => {
                   <td style={{ color: '#854d0e' }}>{rekapData.reduce((s, r) => s + (r.sakit || 0), 0)}</td>
                   <td style={{ color: '#991b1b' }}>{rekapData.reduce((s, r) => s + (r.alfa || 0), 0)}</td>
                   <td>{rekapData.reduce((s, r) => s + (r.total || 0), 0)}</td>
+                  <td>{summary.total ? Math.round(summary.hadir / summary.total * 100) : 0}%</td><td>{summary.terlambat}</td>
+                  {rekapTipe === 'guru' && <><td>{summary.pulang_cepat}</td><td>{formatDuration(rekapData.reduce((s, r) => s + (r.durasi_menit || 0), 0))}</td><td>{rekapData.reduce((s, r) => s + (r.belum_pulang || 0), 0)}</td></>}
                 </tr>
               </tfoot>
             )}

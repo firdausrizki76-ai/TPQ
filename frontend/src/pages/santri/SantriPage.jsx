@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Plus, Filter, Download, Eye, Edit, Trash2, X, Save, User, UserCheck, Calendar, Phone, MapPin, Loader2 } from 'lucide-react';
 import { santriAPI, kelasAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+import StatisticsCards from '../../components/StatisticsCards';
 
 const SantriPage = () => {
   const [santriList, setSantriList] = useState([]);
@@ -224,6 +225,14 @@ const SantriPage = () => {
         </button>
       </div>
 
+      <StatisticsCards loading={loading} items={[
+        { label: 'Total Santri', value: santriList.length },
+        { label: 'Santri Aktif', value: santriList.filter(s => s.status === 'aktif').length },
+        { label: 'Nonaktif', value: santriList.filter(s => s.status === 'nonaktif').length, color: '#64748b' },
+        { label: 'Keluar / Pindah', value: santriList.filter(s => s.status === 'pindah').length, color: '#c2410c' },
+        { label: 'Khotam / Lulus', value: santriList.filter(s => s.status === 'lulus').length },
+        { label: 'Laki-laki / Perempuan', value: `${santriList.filter(s => s.jenis_kelamin === 'L').length} / ${santriList.filter(s => s.jenis_kelamin === 'P').length}` },
+      ]} />
       <div className="card w-full">
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div className="flex items-center gap-4 flex-1">

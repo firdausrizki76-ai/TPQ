@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Filter, Award, ArrowRight, Save, X, Calendar, Loader2, Plus, CheckCircle2, Printer, History, BarChart3, GraduationCap } from 'lucide-react';
 import { ujianAPI, kelasAPI, santriAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+import WhatsAppLink from '../../components/WhatsAppLink';
+import { promotionMessage } from '../../utils/whatsapp';
 
 const UjianPage = () => {
   const [examData, setExamData] = useState([]);
@@ -510,11 +512,12 @@ const UjianPage = () => {
                 <th>Ke Kelas</th>
                 <th>Nilai Tes</th>
                 <th>Status</th>
+                <th>Pemberitahuan</th>
               </tr>
             </thead>
             <tbody>
-              {loadingRiwayat ? <tr><td colSpan="6" className="text-center py-8"><Loader2 size={24} className="animate-spin mx-auto" /></td></tr>
-              : riwayatAll.length === 0 ? <tr><td colSpan="6" className="text-center py-8 text-gray-400">Belum ada riwayat kenaikan kelas</td></tr>
+              {loadingRiwayat ? <tr><td colSpan="7" className="text-center py-8"><Loader2 size={24} className="animate-spin mx-auto" /></td></tr>
+              : riwayatAll.length === 0 ? <tr><td colSpan="7" className="text-center py-8 text-gray-400">Belum ada riwayat kenaikan kelas</td></tr>
               : riwayatAll.map((r, i) => (
                 <tr key={r.id}>
                   <td>{r.tanggal_naik ? new Date(r.tanggal_naik).toLocaleDateString('id-ID') : '-'}</td>
@@ -523,6 +526,7 @@ const UjianPage = () => {
                   <td className="font-bold text-emerald-600">{r.kelas_ke?.nama_kelas || '-'}</td>
                   <td>{r.nilai_tes || '-'}</td>
                   <td><span className={`badge ${r.status_tes === 'lulus' ? 'badge-success' : 'badge-info'}`}>{r.status_tes}</span></td>
+                  <td><WhatsAppLink santri={r.santri} message={promotionMessage(r)} label="WA Kenaikan" enabled={['lulus', 'lulus_bersyarat'].includes(r.status_tes) && !!r.kelas_ke?.nama_kelas && !!r.tanggal_naik} /></td>
                 </tr>
               ))}
             </tbody>

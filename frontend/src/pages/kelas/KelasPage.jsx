@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Edit, X, Save, Download, Users, ArrowUpRight, BookOpen, User, Loader2 } from 'lucide-react';
+import { Search, Edit, X, Save, Download, Users, Plus, BookOpen, User, Loader2 } from 'lucide-react';
 import { kelasAPI, guruAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
+const DAYS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const ZONES = { 'Asia/Jakarta': 'WIB', 'Asia/Makassar': 'WITA', 'Asia/Jayapura': 'WIT' };
 
 const KelasPage = () => {
   const [kelasList, setKelasList] = useState([]);
   const [guruList, setGuruList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState('');
+  const [error, setError] = useState('');
   const [activeModal, setActiveModal] = useState(null);
   const [selectedKelas, setSelectedKelas] = useState(null);
   const [santriInKelas, setSantriInKelas] = useState([]);
@@ -43,7 +47,7 @@ const KelasPage = () => {
   };
 
   const openEdit = (kelas) => {
-    setSelectedKelas(kelas); setFormData({ deskripsi: kelas.deskripsi || '', wali_kelas_id: kelas.wali_kelas_id || '' }); setActiveModal('edit');
+    setSelectedKelas(kelas); setError(''); setFormData({ deskripsi: kelas.deskripsi || '', wali_kelas_id: kelas.wali_kelas_id || '', jadwal: kelas.jadwal || [], zona_waktu: kelas.zona_waktu || 'Asia/Makassar' }); setActiveModal('edit');
   };
 
   const closeModal = () => { setActiveModal(null); setSelectedKelas(null); setSantriInKelas([]); };
@@ -51,7 +55,7 @@ const KelasPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setSaving(true);
-    try { await kelasAPI.update(selectedKelas.id, formData); await loadData(); closeModal(); } catch (e) { alert(e.message); }
+    try { await kelasAPI.update(selectedKelas.id, formData); await loadData(); closeModal(); } catch (e) { setError(e.message); }
     setSaving(false);
   };
 
@@ -71,7 +75,7 @@ const KelasPage = () => {
         <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
           <div className="input-with-icon" style={{ maxWidth: '300px', width: '100%' }}>
             <Search className="icon" size={18} />
-            <input type="text" className="input-field" placeholder="Cari nama kelas..." />
+            <input type="text" className="input-field" placeholder="Cari nama kelas..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} onClick={handleExport}>
             <Download size={18} /> Export Data
@@ -80,13 +84,14 @@ const KelasPage = () => {
 
         <div className="table-responsive">
           <table className="data-table w-full">
-            <thead><tr><th>Urutan</th><th>Kode Kelas</th><th>Nama Kelas</th><th>Wali Kelas</th><th>Jumlah Santri</th><th className="text-center">Aksi</th></tr></thead>
+            <thead><tr><th>Urutan</th><th>Kode Kelas</th><th>Nama Kelas</th><th>Wali Kelas</th><th>Jadwal</th><th>Jumlah Santri</th><th className="text-center">Aksi</th></tr></thead>
             <tbody>
-              {loading ? <tr><td colSpan="6" className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
-              : kelasList.map(kelas => (
+              {loading ? <tr><td colSpan="7" className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
+              : kelasList.filter(k => k.nama_kelas.toLowerCase().includes(search.toLowerCase())).map(kelas => (
                 <tr key={kelas.id}>
                   <td>{kelas.urutan}</td><td>{kelas.kode_kelas}</td><td className="font-medium">{kelas.nama_kelas}</td>
                   <td>{kelas.wali_kelas?.nama_lengkap || '-'}</td>
+                  <td>{kelas.jadwal?.length ? kelas.jadwal.map((j, i) => <div key={i} className="text-xs">{DAYS[j.hari]} {j.mulai}–{j.selesai} {ZONES[kelas.zona_waktu || 'Asia/Makassar']}</div>) : <span className="text-xs text-gray-400">Belum diatur</span>}</td>
                   <td>{kelas.jumlah_santri || 0} Santri</td>
                   <td>
                     <div className="flex justify-center gap-2">
@@ -102,7 +107,7 @@ const KelasPage = () => {
       </div>
 
       {activeModal === 'edit' && selectedKelas && (
-        <div className="modal-overlay"><div className="modal-container" style={{ maxWidth: '450px' }}>
+        <div className="modal-overlay"><div className="modal-container" style={{ maxWidth: '620px' }}>
           <div className="modal-header"><h2 className="modal-title">Edit Kelas: {selectedKelas.nama_kelas}</h2><X className="modal-close" onClick={closeModal} /></div>
           <form onSubmit={handleSubmit}><div className="modal-body space-y-4">
             <div className="form-group">
@@ -113,6 +118,19 @@ const KelasPage = () => {
               </select>
             </div>
             <div className="form-group"><label className="form-label">Deskripsi</label><textarea name="deskripsi" value={formData.deskripsi} onChange={handleInputChange} className="input-field" rows="3" style={{ resize: 'none' }}></textarea></div>
+            <div className="form-group"><label className="form-label">Zona Waktu</label><select name="zona_waktu" className="input-field" value={formData.zona_waktu} onChange={handleInputChange}>{Object.entries(ZONES).map(([zone, label]) => <option key={zone} value={zone}>{label}</option>)}</select></div>
+            <div className="form-group">
+              <label className="form-label">Jadwal Hari dan Jam</label>
+              <p className="text-xs text-gray-500 mb-3">Tambah sesi sesuai kebutuhan. Jam selesai pada hari yang sama. Absensi guru dihitung dari awal sesi pertama sampai akhir sesi terakhir kelas yang diampu.</p>
+              {formData.jadwal.map((j, i) => <div className="schedule-session" key={i}>
+                <select className="input-field" aria-label={`Hari sesi ${i + 1}`} value={j.hari} onChange={e => setFormData(f => ({ ...f, jadwal: f.jadwal.map((v, idx) => idx === i ? { ...v, hari: Number(e.target.value) } : v) }))}>{DAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}</select>
+                <input required type="time" className="input-field" aria-label={`Jam mulai sesi ${i + 1}`} value={j.mulai} onChange={e => setFormData(f => ({ ...f, jadwal: f.jadwal.map((v, idx) => idx === i ? { ...v, mulai: e.target.value } : v) }))} />
+                <input required type="time" className="input-field" aria-label={`Jam selesai sesi ${i + 1}`} value={j.selesai} onChange={e => setFormData(f => ({ ...f, jadwal: f.jadwal.map((v, idx) => idx === i ? { ...v, selesai: e.target.value } : v) }))} />
+                <button type="button" title="Hapus sesi" onClick={() => setFormData(f => ({ ...f, jadwal: f.jadwal.filter((_, idx) => idx !== i) }))}><X size={18} /></button>
+              </div>)}
+              <button type="button" className="btn-primary" onClick={() => setFormData(f => ({ ...f, jadwal: [...f.jadwal, { hari: 1, mulai: '16:00', selesai: '17:00' }] }))}><Plus size={16} /> Tambah Sesi</button>
+            </div>
+            {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
           </div>
           <div className="modal-footer">
             <button type="button" className="btn-primary" style={{ backgroundColor: '#f1f5f9', color: '#64748b' }} onClick={closeModal}>Batal</button>
