@@ -3,6 +3,9 @@ import { Search, Plus, Filter, Download, Eye, Edit, Trash2, X, Save, User, UserC
 import { santriAPI, kelasAPI } from '../../services/api';
 import '../dashboard/Dashboard.css';
 import StatisticsCards from '../../components/StatisticsCards';
+import * as XLSX from 'xlsx';
+import { createSantriWorkbook, formatSantriAddress } from '../../utils/santriExport';
+import { dateInputValue } from '../../utils/date';
 
 const SantriPage = () => {
   const [santriList, setSantriList] = useState([]);
@@ -152,23 +155,15 @@ const SantriPage = () => {
   };
 
   const handleExport = () => {
-    const headers = ['No', 'NIS', 'Nama', 'Kelas', 'Status'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredList.map((s, i) => `${i + 1},${s.nomor_induk},${s.nama_lengkap},${s.kelas?.nama_kelas || '-'},${s.status}`)
-    ].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'data_santri_tpq.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const workbook = createSantriWorkbook(sortedList, kelasList);
+      XLSX.writeFile(workbook, `data_santri_lengkap_${dateInputValue()}.xls`, { bookType: 'biff8' });
+    } catch (error) { alert(`Gagal export data santri: ${error.message}`); }
   };
 
   const filteredList = santriList.filter(s => {
-    const matchSearch = !searchQuery || s.nama_lengkap?.toLowerCase().includes(searchQuery.toLowerCase()) || s.nomor_induk?.includes(searchQuery);
+    const query = searchQuery.trim().toLowerCase();
+    const matchSearch = !query || s.nama_lengkap?.toLowerCase().includes(query) || s.nomor_induk?.toLowerCase().includes(query) || formatSantriAddress(s).toLowerCase().includes(query);
     const matchKelas = !filterKelas || s.kelas_id === filterKelas;
     return matchSearch && matchKelas;
   });
@@ -182,6 +177,8 @@ const SantriPage = () => {
       aVal = a.nama_lengkap?.toLowerCase(); bVal = b.nama_lengkap?.toLowerCase();
     } else if (sortConfig.key === 'kelas') {
       aVal = a.kelas?.nama_kelas?.toLowerCase(); bVal = b.kelas?.nama_kelas?.toLowerCase();
+    } else if (sortConfig.key === 'alamat') {
+      aVal = formatSantriAddress(a).toLowerCase(); bVal = formatSantriAddress(b).toLowerCase();
     }
     
     if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -238,7 +235,7 @@ const SantriPage = () => {
           <div className="flex items-center gap-4 flex-1">
             <div className="input-with-icon" style={{ maxWidth: '300px', width: '100%' }}>
               <Search className="icon" size={18} />
-              <input type="text" className="input-field" placeholder="Cari nama atau NIS..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              <input type="text" className="input-field" placeholder="Cari nama, NIS, atau alamat..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
             <div className="input-with-icon">
               <Filter className="icon" size={18} />
@@ -248,10 +245,11 @@ const SantriPage = () => {
               </select>
             </div>
           </div>
-          <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} onClick={handleExport}>
-            <Download size={18} /> Export Data
+          <button className="btn-primary" style={{ backgroundColor: 'white', color: 'var(--color-primary-container)', border: '1px solid var(--color-surface-container-highest)', borderBottom: '2px solid var(--color-gold)' }} onClick={handleExport} disabled={loading || sortedList.length === 0} title="Unduh data lengkap sesuai pencarian, filter kelas, dan urutan tabel">
+            <Download size={18} /> Export XLS
           </button>
         </div>
+        <p className="text-xs text-gray-500 mb-4">Export memuat data lengkap sesuai pencarian dan filter kelas yang dipilih.</p>
 
         <div className="table-responsive">
           <table className="data-table w-full">
@@ -261,20 +259,22 @@ const SantriPage = () => {
                 <th onClick={() => handleSort('nis')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Urutkan NIS">NIS {sortConfig.key === 'nis' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('nama')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Urutkan Nama">Nama Lengkap {sortConfig.key === 'nama' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
                 <th onClick={() => handleSort('kelas')} style={{ cursor: 'pointer', userSelect: 'none' }} title="Urutkan Kelas">Kelas {sortConfig.key === 'kelas' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</th>
+                <th><button type="button" onClick={() => handleSort('alamat')} title="Urutkan Alamat">Alamat {sortConfig.key === 'alamat' && (sortConfig.direction === 'asc' ? '↑' : '↓')}</button></th>
                 <th>Status</th><th className="text-center">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan="6" className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
+                <tr><td colSpan="7" className="text-center" style={{ padding: '40px' }}><Loader2 size={24} className="animate-spin" style={{ margin: '0 auto' }} /></td></tr>
               ) : sortedList.length === 0 ? (
-                <tr><td colSpan="6" className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data santri</td></tr>
+                <tr><td colSpan="7" className="text-center" style={{ padding: '40px', color: 'var(--color-outline)' }}>Belum ada data santri</td></tr>
               ) : sortedList.map((santri, index) => (
                 <tr key={santri.id}>
                   <td>{index + 1}</td>
                   <td>{santri.nomor_induk}</td>
                   <td className="font-medium">{santri.nama_lengkap}</td>
                   <td>{santri.kelas?.nama_kelas || '-'}</td>
+                  <td style={{ minWidth: '220px', maxWidth: '340px', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{formatSantriAddress(santri) || '-'}</td>
                   <td>
                     <span className={`badge ${santri.status === 'aktif' ? 'badge-success' : ''}`} style={santri.status !== 'aktif' ? { backgroundColor: '#f1f5f9', color: '#64748b' } : {}}>
                       {santri.status}
