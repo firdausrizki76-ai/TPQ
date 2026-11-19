@@ -238,9 +238,9 @@ const KalenderPendidikanPage = () => {
       {/* Stats Summary Cards */}
       {currentMonthStats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
-          <StatMiniCard label="Hari Efektif" value={currentMonthStats.hari_efektif} color="#064e3b" bg="#f0fdf4" />
-          <StatMiniCard label="Hari Libur" value={currentMonthStats.hari_libur} color="#dc2626" bg="#fef2f2" />
-          <StatMiniCard label="Hari Minggu" value={currentMonthStats.hari_minggu} color="#6b7280" bg="#f9fafb" />
+          <StatMiniCard label="Hari Efektif KBM" value={currentMonthStats.hari_efektif} color="#064e3b" bg="#f0fdf4" />
+          <StatMiniCard label="Libur Nasional" value={currentMonthStats.hari_libur} color="#dc2626" bg="#fef2f2" />
+          <StatMiniCard label="Libur Kamis" value={currentMonthStats.hari_kamis ?? currentMonthStats.hari_minggu} color="#e11d48" bg="#fff1f2" />
           <StatMiniCard label="Total Hari" value={currentMonthStats.total_hari} color="#1d4ed8" bg="#eff6ff" />
         </div>
       )}
@@ -316,15 +316,15 @@ const KalenderPendidikanPage = () => {
                 </div>
               </div>
 
-              {/* Day Names */}
+              {/* Day Names (Kamis adalah Hari Libur Rutin TPQ) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 {HARI_NAMES.map((name, i) => (
                   <div key={name} style={{
                     padding: '10px', textAlign: 'center', fontSize: '12px', fontWeight: '700',
-                    color: i === 0 ? '#dc2626' : '#64748b',
+                    color: i === 4 ? '#dc2626' : '#64748b',
                     textTransform: 'uppercase', letterSpacing: '0.5px'
                   }}>
-                    {name}
+                    {name} {i === 4 ? '(Libur)' : ''}
                   </div>
                 ))}
               </div>
@@ -334,7 +334,7 @@ const KalenderPendidikanPage = () => {
                 {calendarDays.map((day, idx) => {
                   const dayEvents = day.date ? (eventsByDate[day.date] || []) : [];
                   const isToday = day.date === todayStr;
-                  const isSunday = idx % 7 === 0;
+                  const isKamis = idx % 7 === 4; // Kamis = Libur Mingguan TPQ
                   const isSelected = day.date === selectedDate;
                   const hasLibur = dayEvents.some(e => e.is_libur);
 
@@ -349,7 +349,7 @@ const KalenderPendidikanPage = () => {
                       style={{
                         minHeight: '80px', padding: '4px', borderRight: '1px solid #f1f5f9',
                         borderBottom: '1px solid #f1f5f9', cursor: day.isCurrentMonth ? 'pointer' : 'default',
-                        backgroundColor: isSelected ? '#f0fdf4' : isToday ? '#fffbeb' : !day.isCurrentMonth ? '#fafafa' : '#ffffff',
+                        backgroundColor: isSelected ? '#f0fdf4' : isToday ? '#fffbeb' : !day.isCurrentMonth ? '#fafafa' : isKamis ? '#fff5f5' : '#ffffff',
                         transition: 'background-color 0.15s',
                         position: 'relative'
                       }}
@@ -359,7 +359,7 @@ const KalenderPendidikanPage = () => {
                         width: '28px', height: '28px', borderRadius: '50%', margin: '2px auto 2px',
                         fontSize: '13px', fontWeight: isToday ? '800' : '500',
                         backgroundColor: isToday ? '#064e3b' : 'transparent',
-                        color: isToday ? '#ffffff' : !day.isCurrentMonth ? '#d1d5db' : isSunday || hasLibur ? '#dc2626' : '#1f2937'
+                        color: isToday ? '#ffffff' : !day.isCurrentMonth ? '#d1d5db' : isKamis || hasLibur ? '#dc2626' : '#1f2937'
                       }}>
                         {day.day}
                       </div>
@@ -440,13 +440,15 @@ const KalenderPendidikanPage = () => {
           {viewMode === 'statistik' && statistik && (
             <div className="card">
               <h3 style={{ margin: '0 0 4px', fontSize: '18px' }}>Statistik Hari Efektif KBM — {year}</h3>
-              <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>Hari efektif = Senin–Sabtu dikurangi hari libur nasional & cuti bersama</p>
+              <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '20px' }}>
+                Hari efektif = KBM aktif (Minggu–Rabu, Jumat–Sabtu) dikurangi hari libur mingguan (Kamis) & hari libur nasional / cuti bersama
+              </p>
               
               {/* Summary */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
                 <StatMiniCard label="Total Hari Efektif KBM" value={statistik.ringkasan.total_hari_efektif} color="#064e3b" bg="#f0fdf4" large />
-                <StatMiniCard label="Total Hari Libur" value={statistik.ringkasan.total_hari_libur} color="#dc2626" bg="#fef2f2" large />
-                <StatMiniCard label="Total Hari Minggu" value={statistik.ringkasan.total_hari_minggu} color="#6b7280" bg="#f9fafb" large />
+                <StatMiniCard label="Total Libur Nasional" value={statistik.ringkasan.total_hari_libur} color="#dc2626" bg="#fef2f2" large />
+                <StatMiniCard label="Total Libur Kamis" value={statistik.ringkasan.total_hari_kamis ?? statistik.ringkasan.total_hari_minggu} color="#e11d48" bg="#fff1f2" large />
               </div>
 
               {/* Table */}
@@ -456,8 +458,8 @@ const KalenderPendidikanPage = () => {
                     <tr>
                       <th>Bulan</th>
                       <th style={{ textAlign: 'center' }}>Total Hari</th>
-                      <th style={{ textAlign: 'center' }}>Hari Minggu</th>
-                      <th style={{ textAlign: 'center' }}>Hari Libur</th>
+                      <th style={{ textAlign: 'center' }}>Libur Kamis</th>
+                      <th style={{ textAlign: 'center' }}>Libur Nasional</th>
                       <th style={{ textAlign: 'center' }}>Hari Efektif KBM</th>
                     </tr>
                   </thead>
@@ -466,7 +468,7 @@ const KalenderPendidikanPage = () => {
                       <tr key={s.bulan} style={{ backgroundColor: s.bulan === month + 1 ? '#f0fdf4' : 'transparent' }}>
                         <td style={{ fontWeight: s.bulan === month + 1 ? '700' : '400' }}>{s.nama_bulan}</td>
                         <td style={{ textAlign: 'center' }}>{s.total_hari}</td>
-                        <td style={{ textAlign: 'center', color: '#6b7280' }}>{s.hari_minggu}</td>
+                        <td style={{ textAlign: 'center', color: '#e11d48', fontWeight: '500' }}>{s.hari_kamis ?? s.hari_minggu}</td>
                         <td style={{ textAlign: 'center', color: '#dc2626', fontWeight: '600' }}>{s.hari_libur}</td>
                         <td style={{ textAlign: 'center', color: '#064e3b', fontWeight: '700', fontSize: '16px' }}>{s.hari_efektif}</td>
                       </tr>
@@ -476,7 +478,7 @@ const KalenderPendidikanPage = () => {
                     <tr style={{ backgroundColor: '#064e3b', color: '#ffffff', fontWeight: '700' }}>
                       <td>TOTAL</td>
                       <td style={{ textAlign: 'center' }}>{statistik.statistik.reduce((s,r) => s + r.total_hari, 0)}</td>
-                      <td style={{ textAlign: 'center' }}>{statistik.ringkasan.total_hari_minggu}</td>
+                      <td style={{ textAlign: 'center' }}>{statistik.ringkasan.total_hari_kamis ?? statistik.ringkasan.total_hari_minggu}</td>
                       <td style={{ textAlign: 'center' }}>{statistik.ringkasan.total_hari_libur}</td>
                       <td style={{ textAlign: 'center', fontSize: '18px' }}>{statistik.ringkasan.total_hari_efektif}</td>
                     </tr>

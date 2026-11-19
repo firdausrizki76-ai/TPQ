@@ -142,15 +142,15 @@ const KalenderViewPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
           <div style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#f0fdf4', textAlign: 'center', border: '1px solid #bbf7d020' }}>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#064e3b' }}>{currentMonthStats.hari_efektif}</div>
-            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Hari Efektif</div>
+            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Hari Efektif KBM</div>
           </div>
           <div style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#fef2f2', textAlign: 'center', border: '1px solid #fecaca20' }}>
             <div style={{ fontSize: '20px', fontWeight: '800', color: '#dc2626' }}>{currentMonthStats.hari_libur}</div>
-            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Hari Libur</div>
+            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Libur Nasional</div>
           </div>
-          <div style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#f9fafb', textAlign: 'center', border: '1px solid #e5e7eb20' }}>
-            <div style={{ fontSize: '20px', fontWeight: '800', color: '#6b7280' }}>{currentMonthStats.hari_minggu}</div>
-            <div style={{ fontSize: '10px', color: '#6b7280', fontWeight: '500' }}>Hari Minggu</div>
+          <div style={{ padding: '10px', borderRadius: '10px', backgroundColor: '#fff1f2', textAlign: 'center', border: '1px solid #fecdd3' }}>
+            <div style={{ fontSize: '20px', fontWeight: '800', color: '#e11d48' }}>{currentMonthStats.hari_kamis ?? currentMonthStats.hari_minggu}</div>
+            <div style={{ fontSize: '10px', color: '#e11d48', fontWeight: '500' }}>Libur Kamis</div>
           </div>
         </div>
       )}
@@ -217,14 +217,14 @@ const KalenderViewPage = () => {
                 </select>
               </div>
 
-              {/* Day Labels */}
+              {/* Day Labels (Kamis Libur Rutin) */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', backgroundColor: '#f8fafc' }}>
                 {HARI_NAMES.map((name, i) => (
                   <div key={name} style={{
                     padding: '8px 0', textAlign: 'center', fontSize: '10px', fontWeight: '700',
-                    color: i === 0 ? '#dc2626' : '#94a3b8', textTransform: 'uppercase'
+                    color: i === 4 ? '#dc2626' : '#94a3b8', textTransform: 'uppercase'
                   }}>
-                    {name}
+                    {name} {i === 4 ? '*' : ''}
                   </div>
                 ))}
               </div>
@@ -234,7 +234,7 @@ const KalenderViewPage = () => {
                 {calendarDays.map((day, idx) => {
                   const dayEvents = day.date ? (eventsByDate[day.date] || []) : [];
                   const isToday = day.date === todayStr;
-                  const isSunday = idx % 7 === 0;
+                  const isKamis = idx % 7 === 4; // Kamis Libur Rutin TPQ
                   const hasLibur = dayEvents.some(e => e.is_libur);
                   const isSelected = day.date === selectedDate;
 
@@ -246,7 +246,7 @@ const KalenderViewPage = () => {
                         minHeight: '52px', padding: '2px', textAlign: 'center',
                         borderRight: '1px solid #f8fafc', borderBottom: '1px solid #f8fafc',
                         cursor: day.isCurrentMonth ? 'pointer' : 'default',
-                        backgroundColor: isSelected ? '#f0fdf4' : isToday ? '#fffbeb' : !day.isCurrentMonth ? '#fafafa' : '#fff',
+                        backgroundColor: isSelected ? '#f0fdf4' : isToday ? '#fffbeb' : !day.isCurrentMonth ? '#fafafa' : isKamis ? '#fff5f5' : '#fff',
                         position: 'relative'
                       }}
                     >
@@ -255,7 +255,7 @@ const KalenderViewPage = () => {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '12px', fontWeight: isToday ? '800' : '500',
                         backgroundColor: isToday ? '#064e3b' : 'transparent',
-                        color: isToday ? '#fff' : !day.isCurrentMonth ? '#d1d5db' : isSunday || hasLibur ? '#dc2626' : '#1f2937'
+                        color: isToday ? '#fff' : !day.isCurrentMonth ? '#d1d5db' : isKamis || hasLibur ? '#dc2626' : '#1f2937'
                       }}>
                         {day.day}
                       </div>

@@ -1965,13 +1965,13 @@ app.get('/api/kalender/statistik', async (req, res) => {
     
     const hariLiburSet = new Set((liburData || []).map(d => d.tanggal));
     
-    // Hitung hari efektif per bulan (Senin-Sabtu, exclude hari libur)
+    // Hitung hari efektif per bulan (Libur mingguan TPQ: Kamis. Minggu tetap masuk KBM)
     const stats = [];
     for (let m = 0; m < 12; m++) {
       const daysInMonth = new Date(parseInt(year), m + 1, 0).getDate();
       let totalHari = 0;
       let hariLibur = 0;
-      let hariMinggu = 0;
+      let hariKamis = 0;
       let hariEfektif = 0;
       
       for (let d = 1; d <= daysInMonth; d++) {
@@ -1979,8 +1979,9 @@ app.get('/api/kalender/statistik', async (req, res) => {
         const dateStr = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
         totalHari++;
         
-        if (date.getDay() === 0) {
-          hariMinggu++;
+        // 4 = Kamis (Hari libur mingguan rutin TPQ)
+        if (date.getDay() === 4) {
+          hariKamis++;
         } else if (hariLiburSet.has(dateStr)) {
           hariLibur++;
         } else {
@@ -1992,7 +1993,8 @@ app.get('/api/kalender/statistik', async (req, res) => {
         bulan: m + 1,
         nama_bulan: ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][m],
         total_hari: totalHari,
-        hari_minggu: hariMinggu,
+        hari_kamis: hariKamis,
+        hari_minggu: hariKamis, // alias kompatibilitas
         hari_libur: hariLibur,
         hari_efektif: hariEfektif
       });
@@ -2000,9 +2002,18 @@ app.get('/api/kalender/statistik', async (req, res) => {
     
     const totalEfektif = stats.reduce((sum, s) => sum + s.hari_efektif, 0);
     const totalLibur = stats.reduce((sum, s) => sum + s.hari_libur, 0);
-    const totalMinggu = stats.reduce((sum, s) => sum + s.hari_minggu, 0);
+    const totalKamis = stats.reduce((sum, s) => sum + s.hari_kamis, 0);
     
-    ok(res, { tahun: year, statistik: stats, ringkasan: { total_hari_efektif: totalEfektif, total_hari_libur: totalLibur, total_hari_minggu: totalMinggu } });
+    ok(res, { 
+      tahun: year, 
+      statistik: stats, 
+      ringkasan: { 
+        total_hari_efektif: totalEfektif, 
+        total_hari_libur: totalLibur, 
+        total_hari_kamis: totalKamis,
+        total_hari_minggu: totalKamis 
+      } 
+    });
   } catch (e) { fail(res, e.message, 500); }
 });
 
@@ -2017,14 +2028,15 @@ app.get('/api/kalender/hari-ini', async (req, res) => {
     
     const isLibur = (data || []).some(d => d.is_libur);
     const dayOfWeek = new Date(today).getDay();
-    const isMinggu = dayOfWeek === 0;
+    const isKamis = dayOfWeek === 4; // Kamis = Libur mingguan TPQ
     
     ok(res, {
       tanggal: today,
-      is_libur: isLibur || isMinggu,
-      is_minggu: isMinggu,
+      is_libur: isLibur || isKamis,
+      is_kamis: isKamis,
+      is_minggu: isKamis, // alias
       events: data || [],
-      keterangan: isMinggu ? 'Hari Minggu' : (isLibur ? (data || []).find(d => d.is_libur)?.judul || 'Hari Libur' : 'Hari Efektif KBM')
+      keterangan: isKamis ? 'Hari Libur Mingguan (Kamis)' : (isLibur ? (data || []).find(d => d.is_libur)?.judul || 'Hari Libur' : 'Hari Efektif KBM')
     });
   } catch (e) { fail(res, e.message, 500); }
 });
