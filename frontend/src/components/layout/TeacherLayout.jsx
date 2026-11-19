@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, CalendarCheck, User, Wallet, Award } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, CalendarCheck, User, Wallet, Award, Calendar } from 'lucide-react';
 
 const TeacherLayout = () => {
   const navigate = useNavigate();
@@ -13,6 +13,7 @@ const TeacherLayout = () => {
     { path: '/guru/absen', icon: CalendarCheck, label: 'Absen' },
     { path: '/guru/tabungan', icon: Wallet, label: 'Tabungan' },
     { path: '/guru/ujian', icon: BookOpen, label: 'Tes' },
+    { path: '/guru/kalender', icon: Calendar, label: 'Kalender' },
     { path: '/guru/profile', icon: User, label: 'Profil' }
   ];
 

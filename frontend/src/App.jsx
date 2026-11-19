@@ -18,6 +18,8 @@ import LaporanKeuanganPage from './pages/laporan/LaporanKeuanganPage';
 import LaporanPage from './pages/laporan/LaporanPage';
 import PengaturanPage from './pages/pengaturan/PengaturanPage';
 import UjianPage from './pages/ujian/UjianPage';
+import KalenderPendidikanPage from './pages/kalender/KalenderPendidikanPage';
+import KalenderViewPage from './pages/kalender/KalenderViewPage';
 import StudentLayout from './components/layout/StudentLayout';
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentPrestasiPage from './pages/student/StudentPrestasiPage';
@@ -85,6 +87,7 @@ function App() {
           <Route path="/tabungan" element={<TabunganPage />} />
           <Route path="/laporan-keuangan" element={<LaporanKeuanganPage />} />
           <Route path="/laporan" element={<LaporanPage />} />
+          <Route path="/kalender" element={<KalenderPendidikanPage />} />
           <Route path="/pengaturan" element={<PengaturanPage />} />
         </Route>
         
@@ -98,6 +101,7 @@ function App() {
           <Route path="/guru/tabungan" element={<TabunganPage />} />
           <Route path="/guru/ujian" element={<UjianPage />} />
           <Route path="/guru/izin" element={<TeacherIzinPage />} />
+          <Route path="/guru/kalender" element={<KalenderViewPage />} />
           <Route path="/guru/profile" element={<ProfilePage />} />
         </Route>
 
@@ -110,6 +114,7 @@ function App() {
           <Route path="/siswa/tabungan" element={<StudentTabunganPage />} />
           <Route path="/siswa/tagihan" element={<StudentTagihanPage />} />
           <Route path="/siswa/riwayat-pendidikan" element={<StudentRiwayatPendidikan />} />
+          <Route path="/siswa/kalender" element={<KalenderViewPage />} />
           <Route path="/siswa/profile" element={<ProfilePage />} />
         </Route>
       </Routes>

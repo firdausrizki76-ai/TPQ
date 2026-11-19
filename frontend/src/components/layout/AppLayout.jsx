@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Users, BookOpen, GraduationCap, 
   CalendarCheck, CreditCard, Wallet, FileBarChart, Settings, LogOut, Menu, X,
-  Award, UserPlus, Medal, DollarSign
+  Award, UserPlus, Medal, DollarSign, Calendar
 } from 'lucide-react';
 import './AppLayout.css';
 
@@ -36,6 +36,7 @@ const AppLayout = () => {
     { path: '/tabungan', icon: <Wallet size={20} />, label: 'Tabungan' },
     { path: '/laporan-keuangan', icon: <DollarSign size={20} />, label: 'Laporan Kas' },
     { path: '/laporan', icon: <FileBarChart size={20} />, label: 'Laporan' },
+    { path: '/kalender', icon: <Calendar size={20} />, label: 'Kalender Pendidikan' },
     { path: '/pengaturan', icon: <Settings size={20} />, label: 'Pengaturan' }
   ].filter(item => {
     if (userRole === 'kepala') {

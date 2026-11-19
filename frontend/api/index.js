@@ -1776,4 +1776,200 @@ app.delete('/api/transaksi-keuangan/:id', async (req, res) => {
   } catch (e) { fail(res, e.message, 500); }
 });
 
+
+// ==================== KALENDER PENDIDIKAN ====================
+
+// GET - Ambil semua event kalender
+app.get('/api/kalender', async (req, res) => {
+  try {
+    const { tahun, bulan, tahun_ajaran, jenis } = req.query;
+    let query = supabase.from('kalender_pendidikan').select('*').order('tanggal', { ascending: true });
+    
+    if (tahun) {
+      query = query.gte('tanggal', `${tahun}-01-01`).lte('tanggal', `${tahun}-12-31`);
+    }
+    if (bulan && tahun) {
+      const paddedMonth = String(bulan).padStart(2, '0');
+      const lastDay = new Date(parseInt(tahun), parseInt(bulan), 0).getDate();
+      query = query.gte('tanggal', `${tahun}-${paddedMonth}-01`).lte('tanggal', `${tahun}-${paddedMonth}-${lastDay}`);
+    }
+    if (tahun_ajaran) {
+      query = query.eq('tahun_ajaran', tahun_ajaran);
+    }
+    if (jenis) {
+      query = query.eq('jenis', jenis);
+    }
+    
+    const { data, error } = await query;
+    if (error) throw error;
+    ok(res, data);
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// POST - Tambah event kalender (manual)
+app.post('/api/kalender', async (req, res) => {
+  try {
+    const { tanggal, judul, deskripsi, jenis, warna, is_libur, tahun_ajaran } = req.body;
+    if (!tanggal || !judul) return fail(res, 'Tanggal dan judul harus diisi');
+    
+    const { data, error } = await supabase.from('kalender_pendidikan').insert({
+      tanggal, judul, deskripsi, jenis: jenis || 'agenda', 
+      warna: warna || '#064e3b', is_libur: is_libur || false,
+      sumber: 'manual', tahun_ajaran
+    }).select().single();
+    if (error) throw error;
+    ok(res, data, 'Event kalender berhasil ditambahkan');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// PUT - Update event kalender
+app.put('/api/kalender/:id', async (req, res) => {
+  try {
+    const { tanggal, judul, deskripsi, jenis, warna, is_libur, tahun_ajaran } = req.body;
+    const updateData = {};
+    if (tanggal !== undefined) updateData.tanggal = tanggal;
+    if (judul !== undefined) updateData.judul = judul;
+    if (deskripsi !== undefined) updateData.deskripsi = deskripsi;
+    if (jenis !== undefined) updateData.jenis = jenis;
+    if (warna !== undefined) updateData.warna = warna;
+    if (is_libur !== undefined) updateData.is_libur = is_libur;
+    if (tahun_ajaran !== undefined) updateData.tahun_ajaran = tahun_ajaran;
+    
+    const { data, error } = await supabase.from('kalender_pendidikan')
+      .update(updateData).eq('id', req.params.id).select().single();
+    if (error) throw error;
+    ok(res, data, 'Event kalender berhasil diperbarui');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// DELETE - Hapus event kalender
+app.delete('/api/kalender/:id', async (req, res) => {
+  try {
+    const { error } = await supabase.from('kalender_pendidikan').delete().eq('id', req.params.id);
+    if (error) throw error;
+    ok(res, null, 'Event kalender berhasil dihapus');
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// POST - Sync hari libur nasional dari API eksternal
+app.post('/api/kalender/sync-libur', async (req, res) => {
+  try {
+    const { tahun } = req.body;
+    const year = tahun || new Date().getFullYear();
+    
+    // Fetch dari API hari libur nasional Indonesia
+    const response = await fetch(`https://api-hari-libur.vercel.app/api?year=${year}`);
+    const result = await response.json();
+    
+    if (!result.data || !Array.isArray(result.data)) {
+      return fail(res, 'Gagal mengambil data hari libur dari API');
+    }
+    
+    // Hapus data libur dari API untuk tahun tersebut (agar tidak duplikat)
+    await supabase.from('kalender_pendidikan')
+      .delete()
+      .eq('sumber', 'api')
+      .gte('tanggal', `${year}-01-01`)
+      .lte('tanggal', `${year}-12-31`);
+    
+    // Insert semua hari libur dari API
+    const holidays = result.data.map(h => ({
+      tanggal: h.date,
+      judul: h.description || h.name || 'Hari Libur',
+      deskripsi: h.description || null,
+      jenis: h.is_cuti ? 'cuti_bersama' : 'libur_nasional',
+      warna: h.is_cuti ? '#f59e0b' : '#dc2626',
+      is_libur: true,
+      sumber: 'api',
+      tahun_ajaran: null
+    }));
+    
+    if (holidays.length > 0) {
+      const { error } = await supabase.from('kalender_pendidikan').insert(holidays);
+      if (error) throw error;
+    }
+    
+    ok(res, { synced: holidays.length, year }, `Berhasil sync ${holidays.length} hari libur untuk tahun ${year}`);
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// GET - Statistik hari efektif per bulan
+app.get('/api/kalender/statistik', async (req, res) => {
+  try {
+    const { tahun } = req.query;
+    const year = tahun || new Date().getFullYear();
+    
+    const { data: liburData, error } = await supabase.from('kalender_pendidikan')
+      .select('tanggal')
+      .eq('is_libur', true)
+      .gte('tanggal', `${year}-01-01`)
+      .lte('tanggal', `${year}-12-31`);
+    if (error) throw error;
+    
+    const hariLiburSet = new Set((liburData || []).map(d => d.tanggal));
+    
+    // Hitung hari efektif per bulan (Senin-Sabtu, exclude hari libur)
+    const stats = [];
+    for (let m = 0; m < 12; m++) {
+      const daysInMonth = new Date(parseInt(year), m + 1, 0).getDate();
+      let totalHari = 0;
+      let hariLibur = 0;
+      let hariMinggu = 0;
+      let hariEfektif = 0;
+      
+      for (let d = 1; d <= daysInMonth; d++) {
+        const date = new Date(parseInt(year), m, d);
+        const dateStr = `${year}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        totalHari++;
+        
+        if (date.getDay() === 0) {
+          hariMinggu++;
+        } else if (hariLiburSet.has(dateStr)) {
+          hariLibur++;
+        } else {
+          hariEfektif++;
+        }
+      }
+      
+      stats.push({
+        bulan: m + 1,
+        nama_bulan: ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][m],
+        total_hari: totalHari,
+        hari_minggu: hariMinggu,
+        hari_libur: hariLibur,
+        hari_efektif: hariEfektif
+      });
+    }
+    
+    const totalEfektif = stats.reduce((sum, s) => sum + s.hari_efektif, 0);
+    const totalLibur = stats.reduce((sum, s) => sum + s.hari_libur, 0);
+    const totalMinggu = stats.reduce((sum, s) => sum + s.hari_minggu, 0);
+    
+    ok(res, { tahun: year, statistik: stats, ringkasan: { total_hari_efektif: totalEfektif, total_hari_libur: totalLibur, total_hari_minggu: totalMinggu } });
+  } catch (e) { fail(res, e.message, 500); }
+});
+
+// GET - Cek status hari ini (libur atau tidak + agenda)
+app.get('/api/kalender/hari-ini', async (req, res) => {
+  try {
+    const today = localDate();
+    const { data, error } = await supabase.from('kalender_pendidikan')
+      .select('*')
+      .eq('tanggal', today);
+    if (error) throw error;
+    
+    const isLibur = (data || []).some(d => d.is_libur);
+    const dayOfWeek = new Date(today).getDay();
+    const isMinggu = dayOfWeek === 0;
+    
+    ok(res, {
+      tanggal: today,
+      is_libur: isLibur || isMinggu,
+      is_minggu: isMinggu,
+      events: data || [],
+      keterangan: isMinggu ? 'Hari Minggu' : (isLibur ? (data || []).find(d => d.is_libur)?.judul || 'Hari Libur' : 'Hari Efektif KBM')
+    });
+  } catch (e) { fail(res, e.message, 500); }
+});
+
 export default app;

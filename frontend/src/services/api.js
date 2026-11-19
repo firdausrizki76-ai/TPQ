@@ -232,3 +232,20 @@ export const transaksiKeuanganAPI = {
   delete: (id) => request(`/transaksi-keuangan/${id}`, { method: 'DELETE' }),
 };
 
+// Kalender Pendidikan
+export const kalenderAPI = {
+  getAll: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/kalender${qs ? `?${qs}` : ''}`);
+  },
+  create: (body) => request('/kalender', { method: 'POST', body }),
+  update: (id, body) => request(`/kalender/${id}`, { method: 'PUT', body }),
+  delete: (id) => request(`/kalender/${id}`, { method: 'DELETE' }),
+  syncLibur: (body) => request('/kalender/sync-libur', { method: 'POST', body }),
+  getStatistik: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/kalender/statistik${qs ? `?${qs}` : ''}`);
+  },
+  getHariIni: () => request('/kalender/hari-ini'),
+};
+
