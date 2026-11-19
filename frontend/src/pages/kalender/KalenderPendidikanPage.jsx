@@ -283,13 +283,37 @@ const KalenderPendidikanPage = () => {
               {/* Calendar Header */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '20px 24px', backgroundColor: '#064e3b', color: '#ffffff'
+                padding: '16px 24px', backgroundColor: '#064e3b', color: '#ffffff', flexWrap: 'wrap', gap: '12px'
               }}>
-                <button onClick={prevMonth} style={navBtnStyle}><ChevronLeft size={20} /></button>
-                <h2 style={{ fontFamily: 'var(--font-family-display)', fontSize: '20px', fontWeight: '700', margin: 0 }}>
-                  {BULAN_NAMES[month]} {year}
-                </h2>
-                <button onClick={nextMonth} style={navBtnStyle}><ChevronRight size={20} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button onClick={prevMonth} style={navBtnStyle} title="Bulan sebelumnya"><ChevronLeft size={20} /></button>
+                  <h2 style={{ fontFamily: 'var(--font-family-display)', fontSize: '20px', fontWeight: '700', margin: 0 }}>
+                    {BULAN_NAMES[month]}
+                  </h2>
+                  <button onClick={nextMonth} style={navBtnStyle} title="Bulan berikutnya"><ChevronRight size={20} /></button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', opacity: 0.85 }}>Tahun:</span>
+                  <select
+                    value={year}
+                    onChange={e => setCurrentDate(new Date(parseInt(e.target.value), month, 1))}
+                    style={{
+                      backgroundColor: 'rgba(255,255,255,0.18)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(255,255,255,0.3)',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      fontSize: '15px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                      <option key={y} value={y} style={{ color: '#000' }}>{y}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               {/* Day Names */}

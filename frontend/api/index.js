@@ -1851,18 +1851,88 @@ app.delete('/api/kalender/:id', async (req, res) => {
   } catch (e) { fail(res, e.message, 500); }
 });
 
+// Helper: Fetch hari libur nasional dengan fallback multi-source
+async function fetchIndonesianHolidays(year) {
+  let holidays = [];
+
+  // Sumber 1: upsetdev/tanggalmerah (GitHub Raw - data SKB 3 Menteri, mendukung 2024, 2025, 2026, 2027)
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/upsetdev/tanggalmerah/main/data/${year}.json`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json && Array.isArray(json.holidays) && json.holidays.length > 0) {
+        holidays = json.holidays.map(h => ({
+          tanggal: h.date,
+          judul: h.name || 'Hari Libur',
+          deskripsi: h.name || null,
+          jenis: h.type === 'leave' ? 'cuti_bersama' : 'libur_nasional',
+          warna: h.type === 'leave' ? '#f59e0b' : '#dc2626',
+          is_libur: true,
+          sumber: 'api',
+          tahun_ajaran: null
+        }));
+        return holidays;
+      }
+    }
+  } catch (err) {
+    console.warn(`[Sync Libur] Gagal fetch dari upsetdev (${year}):`, err.message);
+  }
+
+  // Sumber 2: guangrei/APIHariLibur_V2 (GitHub Raw)
+  try {
+    const res = await fetch('https://raw.githubusercontent.com/guangrei/APIHariLibur_V2/main/calendar.min.json');
+    if (res.ok) {
+      const json = await res.json();
+      const entries = Object.entries(json).filter(([k, v]) => k.startsWith(String(year)) && v.holiday);
+      if (entries.length > 0) {
+        holidays = entries.map(([date, val]) => {
+          const summary = (val.summary && val.summary[0]) || 'Hari Libur';
+          const isCuti = summary.toLowerCase().includes('cuti');
+          return {
+            tanggal: date,
+            judul: summary,
+            deskripsi: (val.description && val.description[0]) || summary,
+            jenis: isCuti ? 'cuti_bersama' : 'libur_nasional',
+            warna: isCuti ? '#f59e0b' : '#dc2626',
+            is_libur: true,
+            sumber: 'api',
+            tahun_ajaran: null
+          };
+        });
+        return holidays;
+      }
+    }
+  } catch (err) {
+    console.warn(`[Sync Libur] Gagal fetch dari guangrei (${year}):`, err.message);
+  }
+
+  // Sumber 3: Fallback hari libur nasional tahunan tetap Indonesia
+  const fixedHolidays = [
+    { tanggal: `${year}-01-01`, judul: `Tahun Baru ${year} Masehi`, jenis: 'libur_nasional', warna: '#dc2626' },
+    { tanggal: `${year}-05-01`, judul: 'Hari Buruh Internasional', jenis: 'libur_nasional', warna: '#dc2626' },
+    { tanggal: `${year}-06-01`, judul: 'Hari Lahir Pancasila', jenis: 'libur_nasional', warna: '#dc2626' },
+    { tanggal: `${year}-08-17`, judul: 'Hari Kemerdekaan Republik Indonesia', jenis: 'libur_nasional', warna: '#dc2626' },
+    { tanggal: `${year}-12-25`, judul: 'Hari Raya Natal', jenis: 'libur_nasional', warna: '#dc2626' }
+  ];
+
+  return fixedHolidays.map(h => ({
+    ...h,
+    deskripsi: h.judul,
+    is_libur: true,
+    sumber: 'api',
+    tahun_ajaran: null
+  }));
+}
+
 // POST - Sync hari libur nasional dari API eksternal
 app.post('/api/kalender/sync-libur', async (req, res) => {
   try {
     const { tahun } = req.body;
-    const year = tahun || new Date().getFullYear();
+    const year = parseInt(tahun) || new Date().getFullYear();
     
-    // Fetch dari API hari libur nasional Indonesia
-    const response = await fetch(`https://api-hari-libur.vercel.app/api?year=${year}`);
-    const result = await response.json();
-    
-    if (!result.data || !Array.isArray(result.data)) {
-      return fail(res, 'Gagal mengambil data hari libur dari API');
+    const holidays = await fetchIndonesianHolidays(year);
+    if (!holidays || holidays.length === 0) {
+      return fail(res, `Tidak ditemukan data hari libur untuk tahun ${year}`);
     }
     
     // Hapus data libur dari API untuk tahun tersebut (agar tidak duplikat)
@@ -1873,21 +1943,8 @@ app.post('/api/kalender/sync-libur', async (req, res) => {
       .lte('tanggal', `${year}-12-31`);
     
     // Insert semua hari libur dari API
-    const holidays = result.data.map(h => ({
-      tanggal: h.date,
-      judul: h.description || h.name || 'Hari Libur',
-      deskripsi: h.description || null,
-      jenis: h.is_cuti ? 'cuti_bersama' : 'libur_nasional',
-      warna: h.is_cuti ? '#f59e0b' : '#dc2626',
-      is_libur: true,
-      sumber: 'api',
-      tahun_ajaran: null
-    }));
-    
-    if (holidays.length > 0) {
-      const { error } = await supabase.from('kalender_pendidikan').insert(holidays);
-      if (error) throw error;
-    }
+    const { error } = await supabase.from('kalender_pendidikan').insert(holidays);
+    if (error) throw error;
     
     ok(res, { synced: holidays.length, year }, `Berhasil sync ${holidays.length} hari libur untuk tahun ${year}`);
   } catch (e) { fail(res, e.message, 500); }

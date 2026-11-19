@@ -187,13 +187,34 @@ const KalenderViewPage = () => {
               {/* Month Nav */}
               <div style={{
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '14px 16px', backgroundColor: '#064e3b', color: '#ffffff'
+                padding: '12px 16px', backgroundColor: '#064e3b', color: '#ffffff'
               }}>
-                <button onClick={prevMonth} style={navBtn}><ChevronLeft size={18} /></button>
-                <span style={{ fontWeight: '700', fontSize: '16px', fontFamily: 'var(--font-family-display)' }}>
-                  {BULAN_NAMES[month]} {year}
-                </span>
-                <button onClick={nextMonth} style={navBtn}><ChevronRight size={18} /></button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button onClick={prevMonth} style={navBtn}><ChevronLeft size={18} /></button>
+                  <span style={{ fontWeight: '700', fontSize: '16px', fontFamily: 'var(--font-family-display)' }}>
+                    {BULAN_NAMES[month]}
+                  </span>
+                  <button onClick={nextMonth} style={navBtn}><ChevronRight size={18} /></button>
+                </div>
+                <select
+                  value={year}
+                  onChange={e => setCurrentDate(new Date(parseInt(e.target.value), month, 1))}
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.18)',
+                    color: '#ffffff',
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: '8px',
+                    padding: '4px 8px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                    <option key={y} value={y} style={{ color: '#000' }}>{y}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Day Labels */}
